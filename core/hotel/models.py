@@ -50,9 +50,20 @@ class Hotel(models.Model):
     )
     
     # Approval and Rating
-    is_approved = models.BooleanField(
-        default=False, 
+    is_approved = models.CharField(
+        max_length=20,
+        choices=[
+            ('pending', 'Pending'),
+            ('approved', 'Approved'),
+            ('rejected', 'Rejected'),
+        ],
+        default='pending',
         help_text="Admin approval status"
+    )
+    rejection_reason = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Reason for hotel rejection"
     )
     average_rating = models.DecimalField(
         max_digits=3, 

@@ -42,8 +42,11 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'drf_spectacular',
+    'channels',
     'accounts',
     'hotel',
+    'superadmin',
+    'notifications',
 ]
 
 MIDDLEWARE = [
@@ -181,3 +184,12 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'nahid288724@gmail.com'
 EMAIL_HOST_PASSWORD = 'geva iusd koxs qtvj'
 DEFAULT_FROM_EMAIL = 'nahid288724@gmail.com'
+
+# Django Channels Configuration
+ASGI_APPLICATION = 'core.asgi.application'
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer'
+    }
+}
