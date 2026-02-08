@@ -40,8 +40,7 @@ class UserRegistrationSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
     password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
     password_confirm = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
-    first_name = serializers.CharField(max_length=150, required=True)
-    last_name = serializers.CharField(max_length=150, required=True)
+    full_name = serializers.CharField(max_length=255, required=True)
 
     def validate(self, data):
         if data['password'] != data.pop('password_confirm'):
@@ -64,12 +63,18 @@ class UserRegistrationSerializer(serializers.Serializer):
                 counter += 1
             username = f"{username}{counter}"
         
+        # Split full_name into first_name and last_name
+        full_name = validated_data['full_name'].strip()
+        name_parts = full_name.split(' ', 1)
+        first_name = name_parts[0] if len(name_parts) > 0 else ''
+        last_name = name_parts[1] if len(name_parts) > 1 else ''
+        
         user = User.objects.create_user(
             username=username,
             email=validated_data['email'],
             password=validated_data['password'],
-            first_name=validated_data['first_name'],
-            last_name=validated_data['last_name']
+            first_name=first_name[:150],
+            last_name=last_name[:150]
         )
         
         # Create traveler profile automatically
