@@ -3,8 +3,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from drf_spectacular.utils import extend_schema, OpenApiResponse
-from .models import Hotel
-from .serializers import HotelSerializer, HotelUpdateSerializer, HotelListSerializer
+from .models import Hotel, SpecialOffer
+from .serializers import (
+    HotelSerializer, HotelUpdateSerializer, HotelListSerializer,
+    SpecialOfferSerializer, SpecialOfferListSerializer
+)
 
 
 class HotelView(APIView):
@@ -124,3 +127,186 @@ class HotelUpdateView(APIView):
             }, status=status.HTTP_200_OK)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class SpecialOfferView(APIView):
+    """
+    POST: Create a special offer (Partner only, for their hotel)
+    GET: List special offers
+         - Partners: Get all their hotel's offers
+         - Others: Get all active offers for approved hotels
+    """
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        responses={200: SpecialOfferListSerializer(many=True)},
+        tags=['Special Offers'],
+        description="List special offers - Partners see all their offers, others see active offers"
+    )
+    def get(self, request):
+        user = request.user
+        
+        # Check if user is a partner
+        if hasattr(user, 'partner_profile'):
+            # Partner gets all their hotel's offers
+            try:
+                hotel = Hotel.objects.get(partner=user)
+                offers = SpecialOffer.objects.filter(hotel=hotel)
+                serializer = SpecialOfferListSerializer(offers, many=True)
+                return Response({
+                    'message': f'{offers.count()} special offers found',
+                    'offers': serializer.data
+                }, status=status.HTTP_200_OK)
+            except Hotel.DoesNotExist:
+                return Response({
+                    'message': 'No hotel found. Create your hotel first.',
+                    'offers': []
+                }, status=status.HTTP_404_NOT_FOUND)
+        else:
+            # Others get active offers for approved hotels only
+            from django.utils import timezone
+            offers = SpecialOffer.objects.filter(
+                hotel__is_approved='approved',
+                is_active=True,
+                valid_until__gte=timezone.now().date()
+            )
+            serializer = SpecialOfferListSerializer(offers, many=True)
+            return Response({
+                'message': f'{offers.count()} active special offers found',
+                'offers': serializer.data
+            }, status=status.HTTP_200_OK)
+    
+    @extend_schema(
+        request=SpecialOfferSerializer,
+        responses={201: SpecialOfferSerializer},
+        tags=['Special Offers'],
+        description="Create a special offer (Partner only)"
+    )
+    def post(self, request):
+        user = request.user
+        
+        # Check if user is a partner
+        if not hasattr(user, 'partner_profile'):
+            return Response({
+                'error': 'Only partners can create special offers'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Get partner's hotel
+        try:
+            hotel = Hotel.objects.get(partner=user)
+        except Hotel.DoesNotExist:
+            return Response({
+                'error': 'No hotel found. Create a hotel first.'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        serializer = SpecialOfferSerializer(data=request.data)
+        
+        if serializer.is_valid():
+            # Set the hotel to the partner's hotel
+            offer = serializer.save(hotel=hotel)
+            
+            return Response({
+                'message': 'Special offer created successfully',
+                'offer': SpecialOfferSerializer(offer).data
+            }, status=status.HTTP_201_CREATED)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class SpecialOfferDetailView(APIView):
+    """
+    GET: Retrieve a specific special offer
+    PATCH: Update a special offer (Partner only, their own offers)
+    """
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        responses={200: SpecialOfferSerializer},
+        tags=['Special Offers'],
+        description="Get a specific special offer by ID"
+    )
+    def get(self, request, pk):
+        try:
+            offer = SpecialOffer.objects.get(pk=pk)
+            
+            # Check permissions
+            user = request.user
+            if hasattr(user, 'partner_profile'):
+                # Partner can view their own offers
+                try:
+                    hotel = Hotel.objects.get(partner=user)
+                    if offer.hotel != hotel:
+                        return Response({
+                            'error': 'You can only view your own hotel offers'
+                        }, status=status.HTTP_403_FORBIDDEN)
+                except Hotel.DoesNotExist:
+                    return Response({
+                        'error': 'No hotel found'
+                    }, status=status.HTTP_404_NOT_FOUND)
+            else:
+                # Others can only view active offers for approved hotels
+                if not (offer.is_active and offer.hotel.is_approved == 'approved'):
+                    return Response({
+                        'error': 'Offer not found or not available'
+                    }, status=status.HTTP_404_NOT_FOUND)
+            
+            serializer = SpecialOfferSerializer(offer)
+            return Response({
+                'message': 'Special offer retrieved successfully',
+                'offer': serializer.data
+            }, status=status.HTTP_200_OK)
+            
+        except SpecialOffer.DoesNotExist:
+            return Response({
+                'error': 'Special offer not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+    
+    @extend_schema(
+        request=SpecialOfferSerializer,
+        responses={200: SpecialOfferSerializer},
+        tags=['Special Offers'],
+        description="Update a special offer (Partner only)"
+    )
+    def patch(self, request, pk):
+        user = request.user
+        
+        # Check if user is a partner
+        if not hasattr(user, 'partner_profile'):
+            return Response({
+                'error': 'Only partners can update special offers'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Get partner's hotel
+        try:
+            hotel = Hotel.objects.get(partner=user)
+        except Hotel.DoesNotExist:
+            return Response({
+                'error': 'No hotel found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Get the offer
+        try:
+            offer = SpecialOffer.objects.get(pk=pk)
+        except SpecialOffer.DoesNotExist:
+            return Response({
+                'error': 'Special offer not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Verify ownership
+        if offer.hotel != hotel:
+            return Response({
+                'error': 'You can only update your own hotel offers'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        serializer = SpecialOfferSerializer(offer, data=request.data, partial=True)
+        
+        if serializer.is_valid():
+            serializer.save()
+            
+            return Response({
+                'message': 'Special offer updated successfully',
+                'offer': SpecialOfferSerializer(offer).data
+            }, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+

@@ -56,3 +56,43 @@ class HotelListSerializer(serializers.ModelSerializer):
             'room_type', 'base_price_per_night', 'images',
             'average_rating', 'total_ratings', 'is_approved'
         ]
+
+
+class SpecialOfferSerializer(serializers.ModelSerializer):
+    """Serializer for creating and managing special offers"""
+    hotel_name = serializers.CharField(source='hotel.hotel_name', read_only=True)
+    
+    class Meta:
+        model = Hotel.special_offers.rel.related_model  # SpecialOffer model
+        fields = [
+            'id', 'hotel', 'hotel_name', 'discount_percentage', 
+            'special_perks', 'valid_until', 'is_active',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'hotel', 'hotel_name', 'created_at', 'updated_at']
+    
+    def validate_discount_percentage(self, value):
+        """Ensure discount is between 1 and 100"""
+        if value < 1 or value > 100:
+            raise serializers.ValidationError("Discount percentage must be between 1 and 100")
+        return value
+    
+    def validate_valid_until(self, value):
+        """Ensure valid_until is a future date"""
+        from django.utils import timezone
+        if value < timezone.now().date():
+            raise serializers.ValidationError("Valid until date must be in the future")
+        return value
+
+
+class SpecialOfferListSerializer(serializers.ModelSerializer):
+    """Simplified serializer for listing special offers"""
+    hotel_name = serializers.CharField(source='hotel.hotel_name', read_only=True)
+    
+    class Meta:
+        model = Hotel.special_offers.rel.related_model  # SpecialOffer model
+        fields = [
+            'id', 'hotel_name', 'discount_percentage', 
+            'special_perks', 'valid_until', 'is_active'
+        ]
+

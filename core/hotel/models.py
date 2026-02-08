@@ -108,3 +108,57 @@ class Hotel(models.Model):
         self.total_ratings += 1
         self.average_rating = round(total_sum / self.total_ratings, 2)
         self.save()
+
+
+class SpecialOffer(models.Model):
+    """Special promotional offers for hotels"""
+    
+    # Relationship with Hotel
+    hotel = models.ForeignKey(
+        Hotel,
+        on_delete=models.CASCADE,
+        related_name='special_offers',
+        help_text="Hotel this offer belongs to"
+    )
+    
+    # Offer Details
+    discount_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        validators=[MinValueValidator(1.00), MaxValueValidator(100.00)],
+        help_text="Discount percentage (1.00% to 100.00%)"
+    )
+    
+    special_perks = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of special perks like ['Free breakfast', 'Late checkout', 'Spa credit $50']"
+    )
+    
+    # Validity
+    valid_until = models.DateField(
+        help_text="Offer valid until this date"
+    )
+    
+    # Status
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this offer is currently active"
+    )
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Special Offer"
+        verbose_name_plural = "Special Offers"
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.hotel.hotel_name} - {self.discount_percentage}% off (Valid until {self.valid_until})"
+    
+    def is_valid(self):
+        """Check if offer is still valid"""
+        from django.utils import timezone
+        return self.is_active and self.valid_until >= timezone.now().date()
