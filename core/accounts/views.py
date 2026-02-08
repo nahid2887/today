@@ -215,14 +215,7 @@ class UserLoginView(APIView):
         profile_type = 'unknown'
         profile_data = {}
         
-        # Check if user is admin/staff
-        if user.is_staff or user.is_superuser:
-            profile_type = 'admin'
-            profile_data = {
-                'is_staff': user.is_staff,
-                'is_superuser': user.is_superuser,
-            }
-        elif hasattr(user, 'traveler_profile'):
+        if hasattr(user, 'traveler_profile'):
             profile_type = 'traveler'
             profile_data = {'profile_type': user.traveler_profile.profile_type}
         elif hasattr(user, 'partner_profile'):
@@ -275,14 +268,7 @@ class EmailLoginView(APIView):
             profile_type = 'unknown'
             profile_data = {}
             
-            # Check if user is admin/staff
-            if user.is_staff or user.is_superuser:
-                profile_type = 'admin'
-                profile_data = {
-                    'is_staff': user.is_staff,
-                    'is_superuser': user.is_superuser,
-                }
-            elif hasattr(user, 'traveler_profile'):
+            if hasattr(user, 'traveler_profile'):
                 profile_type = 'traveler'
                 profile_data = {
                     'profile_type': user.traveler_profile.profile_type,

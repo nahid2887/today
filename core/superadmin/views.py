@@ -2,6 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
 from hotel.models import Hotel
 from .serializers import PendingHotelSerializer
 from drf_spectacular.utils import extend_schema
@@ -172,3 +173,61 @@ class HotelVerificationViewSet(viewsets.ReadOnlyModelViewSet):
             'total': total_count
         }, status=status.HTTP_200_OK)
 
+
+class ApprovedHotelsListView(APIView):
+    """
+    GET: List all approved hotels with count
+    """
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        responses={200: PendingHotelSerializer(many=True)},
+        tags=['Superadmin'],
+        description="Get all approved hotels with count"
+    )
+    def get(self, request):
+        """
+        List all approved hotels with count
+        Returns:
+            - count: Total number of approved hotels
+            - hotels: List of approved hotels
+        """
+        approved_hotels = Hotel.objects.filter(is_approved='approved').order_by('-created_at')
+        serializer = PendingHotelSerializer(approved_hotels, many=True)
+        
+        return Response({
+            'count': approved_hotels.count(),
+            'hotels': serializer.data
+        }, status=status.HTTP_200_OK)
+
+
+class ApprovedHotelDetailView(APIView):
+    """
+    GET: View a single approved hotel by ID
+    """
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        responses={200: PendingHotelSerializer},
+        tags=['Superadmin'],
+        description="Get detailed information of a single approved hotel"
+    )
+    def get(self, request, pk):
+        """
+        Get detailed information of a single approved hotel
+        Args:
+            pk: Hotel ID
+        Returns:
+            - hotel: Detailed hotel information
+        """
+        try:
+            hotel = Hotel.objects.get(id=pk, is_approved='approved')
+            serializer = PendingHotelSerializer(hotel)
+            
+            return Response({
+                'hotel': serializer.data
+            }, status=status.HTTP_200_OK)
+        except Hotel.DoesNotExist:
+            return Response({
+                'error': 'Approved hotel not found'
+            }, status=status.HTTP_404_NOT_FOUND)
