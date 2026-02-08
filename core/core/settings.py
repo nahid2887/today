@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'channels',
     'accounts',
     'hotel',
+    'traveler',
     'superadmin',
     'notifications',
 ]

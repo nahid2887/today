@@ -29,5 +29,6 @@ urlpatterns = [
     # API Routes
     path('api/auth/', include('accounts.urls')),
     path('api/hotel/', include('hotel.urls')),
+    path('api/traveler/', include('traveler.urls')),
     path('api/superadmin/', include('superadmin.urls')),
 ]

@@ -96,3 +96,30 @@ class SpecialOfferListSerializer(serializers.ModelSerializer):
             'special_perks', 'valid_until', 'is_active'
         ]
 
+
+class HotelDetailSerializer(serializers.ModelSerializer):
+    """Detailed serializer for hotel with special offers"""
+    partner_name = serializers.CharField(source='partner.username', read_only=True)
+    partner_email = serializers.CharField(source='partner.email', read_only=True)
+    special_offers = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Hotel
+        fields = [
+            'id', 'partner_name', 'partner_email',
+            'hotel_name', 'location', 'city', 'country',
+            'number_of_rooms', 'room_type', 'description', 'base_price_per_night',
+            'images', 'amenities', 'is_approved', 'average_rating', 'total_ratings',
+            'commission_rate', 'created_at', 'updated_at', 'special_offers'
+        ]
+    
+    def get_special_offers(self, obj):
+        """Get only active and valid special offers"""
+        from django.utils import timezone
+        offers = obj.special_offers.filter(
+            is_active=True,
+            valid_until__gte=timezone.now().date()
+        )
+        return SpecialOfferListSerializer(offers, many=True).data
+
+

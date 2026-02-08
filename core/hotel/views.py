@@ -6,7 +6,7 @@ from drf_spectacular.utils import extend_schema, OpenApiResponse
 from .models import Hotel, SpecialOffer
 from .serializers import (
     HotelSerializer, HotelUpdateSerializer, HotelListSerializer,
-    SpecialOfferSerializer, SpecialOfferListSerializer
+    SpecialOfferSerializer, SpecialOfferListSerializer, HotelDetailSerializer
 )
 
 
@@ -309,4 +309,45 @@ class SpecialOfferDetailView(APIView):
             }, status=status.HTTP_200_OK)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class HotelDetailView(APIView):
+    """
+    GET: Retrieve detailed hotel information with special offers
+    """
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        responses={200: HotelDetailSerializer},
+        tags=['Hotel'],
+        description="Get detailed hotel information including active special offers"
+    )
+    def get(self, request, pk):
+        """
+        Get hotel details with active special offers
+        Only approved hotels are visible to non-partners
+        """
+        try:
+            hotel = Hotel.objects.get(pk=pk)
+            
+            # Check if user is the hotel owner or if hotel is approved
+            user = request.user
+            is_owner = hasattr(user, 'partner_profile') and hotel.partner == user
+            
+            if not is_owner and hotel.is_approved != 'approved':
+                return Response({
+                    'error': 'Hotel not found or not available'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            serializer = HotelDetailSerializer(hotel)
+            return Response({
+                'message': 'Hotel details retrieved successfully',
+                'hotel': serializer.data
+            }, status=status.HTTP_200_OK)
+            
+        except Hotel.DoesNotExist:
+            return Response({
+                'error': 'Hotel not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+
 
