@@ -84,19 +84,32 @@ class UserRegistrationSerializer(serializers.Serializer):
 
 
 class PartnerProfileSerializer(serializers.ModelSerializer):
+    profile_picture_url = serializers.SerializerMethodField()
+    
     class Meta:
         model = PartnerProfile
         fields = ['profile_type', 'property_name', 'property_address', 'website_url', 
-                  'contact_person_name', 'phone_number', 'role', 'special_deals_offers', 'profile_picture']
+                  'contact_person_name', 'phone_number', 'role', 'special_deals_offers', 'profile_picture', 'profile_picture_url']
         read_only_fields = ['profile_type']
+    
+    def get_profile_picture_url(self, obj):
+        """Get full URL for profile picture"""
+        if obj.profile_picture:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.profile_picture.url)
+            return obj.profile_picture.url
+        return None
 
 
 class PartnerProfileUpdateSerializer(serializers.ModelSerializer):
     """Serializer for updating partner profile (PATCH)"""
+    profile_picture_url = serializers.SerializerMethodField()
+    
     class Meta:
         model = PartnerProfile
         fields = ['property_name', 'property_address', 'website_url', 
-                  'contact_person_name', 'phone_number', 'role', 'special_deals_offers', 'profile_picture']
+                  'contact_person_name', 'phone_number', 'role', 'special_deals_offers', 'profile_picture', 'profile_picture_url']
         extra_kwargs = {
             'property_name': {'required': False},
             'property_address': {'required': False},
@@ -104,6 +117,15 @@ class PartnerProfileUpdateSerializer(serializers.ModelSerializer):
             'phone_number': {'required': False},
             'role': {'required': False},
         }
+    
+    def get_profile_picture_url(self, obj):
+        """Get full URL for profile picture"""
+        if obj.profile_picture:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.profile_picture.url)
+            return obj.profile_picture.url
+        return None
 
 
 class PartnerRegistrationStep1Serializer(serializers.Serializer):

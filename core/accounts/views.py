@@ -227,7 +227,11 @@ class UserLoginView(APIView):
         profile_type = 'unknown'
         profile_data = {}
         
-        if hasattr(user, 'traveler_profile'):
+        # Check if user is superuser/admin
+        if user.is_superuser or user.is_staff:
+            profile_type = 'admin'
+            profile_data = {'profile_type': 'admin', 'is_staff': user.is_staff, 'is_superuser': user.is_superuser}
+        elif hasattr(user, 'traveler_profile'):
             profile_type = 'traveler'
             profile_data = {'profile_type': user.traveler_profile.profile_type}
         elif hasattr(user, 'partner_profile'):
@@ -591,25 +595,16 @@ class PartnerProfileView(APIView):
 
 class TravelerTermsView(APIView):
     """
-    GET: Retrieve traveler terms & conditions (for travelers)
+    GET: Retrieve traveler terms & conditions (publicly accessible)
     PATCH: Update traveler terms & conditions (admin only)
     """
-    permission_classes = [IsAuthenticated]
     
     @extend_schema(
         responses={200: OpenApiResponse(description="Traveler terms & conditions retrieved")},
         tags=['Traveler Info'],
-        description="Get traveler terms & conditions (accessible by travelers)"
+        description="Get traveler terms & conditions (publicly accessible - no authentication required)"
     )
     def get(self, request):
-        user = request.user
-        
-        # Check if user is a traveler
-        if not hasattr(user, 'traveler_profile'):
-            return Response({
-                'error': 'Access denied. Only travelers can view this information.'
-            }, status=status.HTTP_403_FORBIDDEN)
-        
         # Get or create the singleton instance
         traveler_info, created = TravelerInfo.objects.get_or_create(id=1)
         
@@ -628,8 +623,8 @@ class TravelerTermsView(APIView):
     def patch(self, request):
         user = request.user
         
-        # Check if user is admin
-        if not user.is_staff:
+        # Check if user is authenticated and is admin
+        if not user.is_authenticated or not user.is_staff:
             return Response({
                 'error': 'Access denied. Only admins can update this information.'
             }, status=status.HTTP_403_FORBIDDEN)
@@ -647,25 +642,16 @@ class TravelerTermsView(APIView):
 
 class TravelerPrivacyView(APIView):
     """
-    GET: Retrieve traveler privacy policy (for travelers)
+    GET: Retrieve traveler privacy policy (publicly accessible)
     PATCH: Update traveler privacy policy (admin only)
     """
-    permission_classes = [IsAuthenticated]
     
     @extend_schema(
         responses={200: OpenApiResponse(description="Traveler privacy policy retrieved")},
         tags=['Traveler Info'],
-        description="Get traveler privacy policy (accessible by travelers)"
+        description="Get traveler privacy policy (publicly accessible - no authentication required)"
     )
     def get(self, request):
-        user = request.user
-        
-        # Check if user is a traveler
-        if not hasattr(user, 'traveler_profile'):
-            return Response({
-                'error': 'Access denied. Only travelers can view this information.'
-            }, status=status.HTTP_403_FORBIDDEN)
-        
         # Get or create the singleton instance
         traveler_info, created = TravelerInfo.objects.get_or_create(id=1)
         
@@ -684,8 +670,8 @@ class TravelerPrivacyView(APIView):
     def patch(self, request):
         user = request.user
         
-        # Check if user is admin
-        if not user.is_staff:
+        # Check if user is authenticated and is admin
+        if not user.is_authenticated or not user.is_staff:
             return Response({
                 'error': 'Access denied. Only admins can update this information.'
             }, status=status.HTTP_403_FORBIDDEN)

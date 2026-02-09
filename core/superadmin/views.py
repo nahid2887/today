@@ -102,9 +102,16 @@ class HotelVerificationViewSet(viewsets.ReadOnlyModelViewSet):
         )
         
         serializer = self.get_serializer(hotel)
+        hotel_data = serializer.data
+        
+        # Convert image paths to full URLs
+        if 'images' in hotel_data and hotel_data['images']:
+            base_url = request.build_absolute_uri('/').rstrip('/')
+            hotel_data['images'] = [f"{base_url}{img}" if not img.startswith('http') else img for img in hotel_data['images']]
+        
         return Response({
             'message': 'Hotel approved successfully',
-            'hotel': serializer.data
+            'hotel': hotel_data
         }, status=status.HTTP_200_OK)
     
     @extend_schema(
@@ -151,10 +158,17 @@ class HotelVerificationViewSet(viewsets.ReadOnlyModelViewSet):
         )
         
         serializer = self.get_serializer(hotel)
+        hotel_data = serializer.data
+        
+        # Convert image paths to full URLs
+        if 'images' in hotel_data and hotel_data['images']:
+            base_url = request.build_absolute_uri('/').rstrip('/')
+            hotel_data['images'] = [f"{base_url}{img}" if not img.startswith('http') else img for img in hotel_data['images']]
+        
         return Response({
             'message': 'Hotel rejected',
             'reason': reason,
-            'hotel': serializer.data
+            'hotel': hotel_data
         }, status=status.HTTP_200_OK)
     
     @extend_schema(description="Get verification statistics")
