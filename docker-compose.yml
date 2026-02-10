@@ -7,6 +7,10 @@ services:
       POSTGRES_PASSWORD: hotel_pass
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    # Allow remote connections
+    command: postgres -c listen_addresses='*'
 
   web:
     build:

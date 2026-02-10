@@ -102,12 +102,17 @@ class HotelView(APIView):
                 'error': 'No hotel found. Your hotel should have been auto-created.'
             }, status=status.HTTP_404_NOT_FOUND)
         
-        # Handle image uploads if present
+        # Handle image uploads if present (both 'image' and 'images' field names)
         uploaded_image_urls = []
-        if 'image' in request.FILES:
-            # Handle multiple files uploaded with the same field name
+        image_files = []
+        
+        # Check for images in request.FILES
+        if 'images' in request.FILES:
+            image_files = request.FILES.getlist('images')
+        elif 'image' in request.FILES:
             image_files = request.FILES.getlist('image')
-            
+        
+        if image_files:
             for image_file in image_files:
                 # Validate file size
                 max_size = getattr(settings, 'MAX_UPLOAD_SIZE', 5242880)  # 5MB
@@ -152,7 +157,7 @@ class HotelView(APIView):
         data = {}
         # Copy only non-file fields to avoid serializer validation errors
         for key, value in request.data.items():
-            if key != 'image':  # Skip the image field since we handle files separately
+            if key not in ['image', 'images']:  # Skip file field keys
                 data[key] = value
         
         # Handle images separately

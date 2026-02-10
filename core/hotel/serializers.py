@@ -179,6 +179,14 @@ class SpecialOfferSerializer(serializers.ModelSerializer):
     """Serializer for creating and managing special offers"""
     hotel_name = serializers.CharField(source='hotel.hotel_name', read_only=True)
     
+    # Use FlexibleListField for special_perks to handle both JSON and form-data
+    special_perks = FlexibleListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+        help_text="Array of special perks like ['Free breakfast', 'Late checkout', 'Spa credit']"
+    )
+    
     class Meta:
         model = Hotel.special_offers.rel.related_model  # SpecialOffer model
         fields = [
@@ -205,6 +213,14 @@ class SpecialOfferSerializer(serializers.ModelSerializer):
 class SpecialOfferListSerializer(serializers.ModelSerializer):
     """Simplified serializer for listing special offers"""
     hotel_name = serializers.CharField(source='hotel.hotel_name', read_only=True)
+    
+    # Use FlexibleListField for special_perks to handle both JSON and form-data
+    special_perks = FlexibleListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+        help_text="Array of special perks"
+    )
     
     class Meta:
         model = Hotel.special_offers.rel.related_model  # SpecialOffer model

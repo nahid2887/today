@@ -212,5 +212,5 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # File Upload Settings
-MAX_UPLOAD_SIZE = 5242880  # 5MB in bytes
+MAX_UPLOAD_SIZE = 104857600  # 100MB in bytes
 ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
