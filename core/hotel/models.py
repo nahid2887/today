@@ -108,3 +108,130 @@ class Hotel(models.Model):
         self.total_ratings += 1
         self.average_rating = round(total_sum / self.total_ratings, 2)
         self.save()
+
+
+class Booking(models.Model):
+    """Hotel booking model - Travelers can book hotels with automatic price calculation"""
+    
+    STATUS_CHOICES = [
+        ('pending', 'Pending Confirmation'),
+        ('confirmed', 'Confirmed'),
+        ('cancelled', 'Cancelled'),
+        ('completed', 'Completed'),
+    ]
+    
+    # Relationships
+    traveler = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='hotel_bookings',
+        help_text="Traveler who made the booking"
+    )
+    hotel = models.ForeignKey(
+        Hotel,
+        on_delete=models.CASCADE,
+        related_name='bookings',
+        help_text="Hotel being booked"
+    )
+    
+    # Booking Dates
+    check_in_date = models.DateField(help_text="Check-in date")
+    check_out_date = models.DateField(help_text="Check-out date")
+    
+    # Guest Information
+    number_of_guests = models.PositiveIntegerField(
+        default=1,
+        validators=[MinValueValidator(1)],
+        help_text="Number of guests"
+    )
+    
+    # Pricing (auto-calculated)
+    price_per_night = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Price per night from hotel"
+    )
+    number_of_nights = models.PositiveIntegerField(
+        default=1,
+        help_text="Number of nights"
+    )
+    total_price = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        help_text="Total price for the booking"
+    )
+    discount_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0.00,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        help_text="Discount percentage if any"
+    )
+    discount_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0.00,
+        help_text="Discount amount in currency"
+    )
+    final_price = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        help_text="Final price after discount"
+    )
+    
+    # Special Perks/Amenities
+    special_perks = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of special perks included ['Free parking', 'Welcome cocktail', 'Late checkout']"
+    )
+    
+    # Booking Status
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending',
+        help_text="Booking status"
+    )
+    
+    # Notes
+    special_requests = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Special requests from the traveler"
+    )
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Hotel Booking"
+        verbose_name_plural = "Hotel Bookings"
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.traveler.username} - {self.hotel.hotel_name} ({self.check_in_date} to {self.check_out_date})"
+    
+    def calculate_total_price(self):
+        """Calculate total price based on number of nights and price per night"""
+        from datetime import datetime
+        check_in = datetime.strptime(str(self.check_in_date), '%Y-%m-%d').date() if isinstance(self.check_in_date, str) else self.check_in_date
+        check_out = datetime.strptime(str(self.check_out_date), '%Y-%m-%d').date() if isinstance(self.check_out_date, str) else self.check_out_date
+        
+        nights = (check_out - check_in).days
+        self.number_of_nights = max(nights, 1)
+        self.total_price = self.price_per_night * self.number_of_nights
+        
+        # Calculate discount
+        if self.discount_percentage > 0:
+            self.discount_amount = (self.total_price * self.discount_percentage) / 100
+            self.final_price = self.total_price - self.discount_amount
+        else:
+            self.discount_amount = 0
+            self.final_price = self.total_price
+    
+    def save(self, *args, **kwargs):
+        """Override save to calculate pricing"""
+        self.calculate_total_price()
+        super().save(*args, **kwargs)

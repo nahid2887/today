@@ -2,7 +2,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, BasePermission
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse
@@ -19,13 +19,24 @@ from .serializers import (
     ResetPasswordSerializer,
     ChangePasswordSerializer,
     TravelerInfoSerializer,
-    PartnerInfoSerializer
+    PartnerInfoSerializer,
+    UserListSerializer,
+    UserDetailSerializer
 )
+from rest_framework.pagination import PageNumberPagination
 from .models import PasswordResetOTP, TravelerInfo, PartnerInfo
 from django.utils import timezone
 from datetime import timedelta
 from django.core.mail import send_mail
 from django.conf import settings
+
+
+class IsSuperAdmin(BasePermission):
+    """
+    Allows access only to superadmin users.
+    """
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_superuser)
 
 
 class UserRegistrationView(APIView):
@@ -809,3 +820,169 @@ class PartnerPrivacyView(APIView):
             'privacy_policy': partner_info.privacy_policy,
             'updated_at': partner_info.updated_at
         }, status=status.HTTP_200_OK)
+
+
+class UserPagination(PageNumberPagination):
+    """Pagination class for user list"""
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
+class UserManagementListView(APIView):
+    """
+    GET: List all users with filtering, search, and pagination (superadmin only)
+    Query Parameters:
+    - role: Filter by role (traveler, partner, admin, unknown)
+    - search: Search by username, email, first_name, or last_name
+    - page: Page number for pagination (default: 1)
+    - page_size: Number of items per page (default: 10, max: 100)
+    """
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name='role',
+                description='Filter by user role: traveler, partner, admin, unknown',
+                required=False,
+                type=str,
+                enum=['traveler', 'partner', 'admin', 'unknown']
+            ),
+            OpenApiParameter(
+                name='search',
+                description='Search by username, email, first_name, or last_name',
+                required=False,
+                type=str
+            ),
+            OpenApiParameter(
+                name='page',
+                description='Page number for pagination (default: 1)',
+                required=False,
+                type=int
+            ),
+            OpenApiParameter(
+                name='page_size',
+                description='Number of items per page (default: 10, max: 100)',
+                required=False,
+                type=int
+            ),
+        ],
+        responses={200: OpenApiResponse(description="List of users with pagination")},
+        tags=['User Management'],
+        description="List all users with filtering, search, and pagination (superadmin only)"
+    )
+    def get(self, request):
+        # Get filter and search parameters
+        role_filter = request.query_params.get('role', None)
+        search_query = request.query_params.get('search', None)
+
+        # Start with all users
+        users = User.objects.all().order_by('-date_joined')
+
+        # Apply search filter
+        if search_query:
+            from django.db.models import Q
+            users = users.filter(
+                Q(username__icontains=search_query) |
+                Q(email__icontains=search_query) |
+                Q(first_name__icontains=search_query) |
+                Q(last_name__icontains=search_query)
+            )
+
+        # Apply role filter
+        if role_filter:
+            if role_filter == 'admin':
+                users = users.filter(is_superuser=True)
+            elif role_filter == 'traveler':
+                # Get user IDs that have traveler profiles
+                traveler_user_ids = TravelerProfile.objects.values_list('user_id', flat=True)
+                users = users.filter(id__in=traveler_user_ids)
+            elif role_filter == 'partner':
+                # Get user IDs that have partner profiles
+                partner_user_ids = PartnerProfile.objects.values_list('user_id', flat=True)
+                users = users.filter(id__in=partner_user_ids)
+
+        # Get total count
+        total_count = users.count()
+
+        # Apply pagination
+        paginator = UserPagination()
+        paginated_users = paginator.paginate_queryset(users, request)
+
+        # Serialize data
+        serializer = UserListSerializer(paginated_users, many=True)
+
+        return Response({
+            'message': 'Users retrieved successfully',
+            'total_count': total_count,
+            'count': len(paginated_users),
+            'next': paginator.get_next_link(),
+            'previous': paginator.get_previous_link(),
+            'page_size': paginator.page_size,
+            'current_page': paginator.page_number if hasattr(paginator, 'page_number') else 1,
+            'results': serializer.data
+        }, status=status.HTTP_200_OK)
+
+
+class UserDetailManagementView(APIView):
+    """
+    GET: Retrieve detailed information about a specific user (superadmin only)
+    DELETE: Delete a user account (superadmin only)
+    """
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+
+    @extend_schema(
+        responses={200: OpenApiResponse(description="User details retrieved successfully")},
+        tags=['User Management'],
+        description="Get detailed information about a specific user (superadmin only)"
+    )
+    def get(self, request, user_id):
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({
+                'error': 'User not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = UserDetailSerializer(user)
+
+        return Response({
+            'message': 'User details retrieved successfully',
+            'user': serializer.data
+        }, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        responses={204: OpenApiResponse(description="User deleted successfully")},
+        tags=['User Management'],
+        description="Delete a user account (superadmin only)"
+    )
+    def delete(self, request, user_id):
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({
+                'error': 'User not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        # Prevent deleting the superadmin making the request
+        if user.id == request.user.id:
+            return Response({
+                'error': 'Cannot delete your own account'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        username = user.username
+        email = user.email
+
+        # Delete the user (this will cascade delete related profiles)
+        user.delete()
+
+        return Response({
+            'message': 'User deleted successfully',
+            'deleted_user': {
+                'id': user_id,
+                'username': username,
+                'email': email
+            }
+        }, status=status.HTTP_200_OK)
+

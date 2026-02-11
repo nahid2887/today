@@ -14,7 +14,9 @@ from .views import (
     TravelerTermsView,
     TravelerPrivacyView,
     PartnerTermsView,
-    PartnerPrivacyView
+    PartnerPrivacyView,
+    UserManagementListView,
+    UserDetailManagementView
 )
 
 app_name = 'accounts'
@@ -46,4 +48,8 @@ urlpatterns = [
     # Partner Information Endpoints
     path('partner/terms/', PartnerTermsView.as_view(), name='partner_terms'),
     path('partner/privacy/', PartnerPrivacyView.as_view(), name='partner_privacy'),
+    
+    # User Management Endpoints (Superadmin only)
+    path('admin/users/', UserManagementListView.as_view(), name='user_management_list'),
+    path('admin/users/<int:user_id>/', UserDetailManagementView.as_view(), name='user_management_detail'),
 ]

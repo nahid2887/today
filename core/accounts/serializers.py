@@ -298,3 +298,47 @@ class PartnerInfoSerializer(serializers.ModelSerializer):
         model = PartnerInfo
         fields = ['id', 'title', 'description', 'terms_and_conditions', 'privacy_policy', 'commission_info', 'updated_at']
         read_only_fields = ['id', 'updated_at']
+
+
+class UserDetailSerializer(serializers.ModelSerializer):
+    """Detailed user serializer for admin viewing individual users"""
+    traveler_profile = TravelerProfileSerializer(read_only=True)
+    partner_profile = PartnerProfileSerializer(read_only=True)
+    profile_type = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'is_active', 'is_staff', 'is_superuser', 
+                  'date_joined', 'last_login', 'profile_type', 'traveler_profile', 'partner_profile']
+        read_only_fields = ['id', 'date_joined', 'last_login']
+    
+    def get_profile_type(self, obj):
+        """Determine user profile type"""
+        if obj.is_superuser or obj.is_staff:
+            return 'admin'
+        elif hasattr(obj, 'traveler_profile'):
+            return 'traveler'
+        elif hasattr(obj, 'partner_profile'):
+            return 'partner'
+        return 'unknown'
+
+
+class UserListSerializer(serializers.ModelSerializer):
+    """Simplified user serializer for listing users with admin"""
+    profile_type = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'is_active', 'is_staff', 
+                  'is_superuser', 'date_joined', 'profile_type']
+        read_only_fields = fields
+    
+    def get_profile_type(self, obj):
+        """Determine user profile type"""
+        if obj.is_superuser or obj.is_staff:
+            return 'admin'
+        elif hasattr(obj, 'traveler_profile'):
+            return 'traveler'
+        elif hasattr(obj, 'partner_profile'):
+            return 'partner'
+        return 'unknown'
