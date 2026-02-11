@@ -110,6 +110,7 @@ class Hotel(models.Model):
         self.save()
 
 
+<<<<<<< HEAD
 class Booking(models.Model):
     """Hotel booking model - Travelers can book hotels with automatic price calculation"""
     
@@ -199,6 +200,42 @@ class Booking(models.Model):
         blank=True,
         null=True,
         help_text="Special requests from the traveler"
+=======
+class SpecialOffer(models.Model):
+    """Special promotional offers for hotels"""
+    
+    # Relationship with Hotel
+    hotel = models.ForeignKey(
+        Hotel,
+        on_delete=models.CASCADE,
+        related_name='special_offers',
+        help_text="Hotel this offer belongs to"
+    )
+    
+    # Offer Details
+    discount_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        validators=[MinValueValidator(1.00), MaxValueValidator(100.00)],
+        help_text="Discount percentage (1.00% to 100.00%)"
+    )
+    
+    special_perks = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of special perks like ['Free breakfast', 'Late checkout', 'Spa credit $50']"
+    )
+    
+    # Validity
+    valid_until = models.DateField(
+        help_text="Offer valid until this date"
+    )
+    
+    # Status
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this offer is currently active"
+>>>>>>> 25b4413610ab56532672901829a009d3cea036ca
     )
     
     # Timestamps
@@ -206,6 +243,7 @@ class Booking(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
+<<<<<<< HEAD
         verbose_name = "Hotel Booking"
         verbose_name_plural = "Hotel Bookings"
         ordering = ['-created_at']
@@ -235,3 +273,16 @@ class Booking(models.Model):
         """Override save to calculate pricing"""
         self.calculate_total_price()
         super().save(*args, **kwargs)
+=======
+        verbose_name = "Special Offer"
+        verbose_name_plural = "Special Offers"
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.hotel.hotel_name} - {self.discount_percentage}% off (Valid until {self.valid_until})"
+    
+    def is_valid(self):
+        """Check if offer is still valid"""
+        from django.utils import timezone
+        return self.is_active and self.valid_until >= timezone.now().date()
+>>>>>>> 25b4413610ab56532672901829a009d3cea036ca

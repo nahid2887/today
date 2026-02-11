@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: hotel_db
+      POSTGRES_USER: hotel_user
+      POSTGRES_PASSWORD: hotel_pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    # Allow remote connections
+    command: postgres -c listen_addresses='*'
+
+  web:
+    build:
+      context: ./core
+      dockerfile: Dockerfile
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./core:/app
+    ports:
+      - "8000:8000"
+    environment:
+      DB_ENGINE: django.db.backends.postgresql
+      DB_NAME: hotel_db
+      DB_USER: hotel_user
+      DB_PASSWORD: hotel_pass
+      DB_HOST: db
+      DB_PORT: "5432"
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:

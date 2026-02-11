@@ -2,6 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
 from hotel.models import Hotel
 from .serializers import PendingHotelSerializer
 from drf_spectacular.utils import extend_schema
@@ -50,16 +51,45 @@ class HotelVerificationViewSet(viewsets.ReadOnlyModelViewSet):
         queryset = self.filter_queryset(self.get_queryset())
         serializer = self.get_serializer(queryset, many=True)
         
+        hotels_data = serializer.data
+        
+        # Convert image paths to full URLs
+        base_url = request.build_absolute_uri('/').rstrip('/')
+        for hotel in hotels_data:
+            if 'images' in hotel and hotel['images']:
+                hotel['images'] = [f"{base_url}{img}" if not img.startswith('http') else img for img in hotel['images']]
+        
+        # Get recently verified/approved hotels (last 5)
+        recently_approved = Hotel.objects.filter(is_approved='approved').order_by('-updated_at')[:5]
+        recently_approved_serializer = self.get_serializer(recently_approved, many=True)
+        recently_approved_data = recently_approved_serializer.data
+        
+        # Convert image paths to full URLs for recently approved
+        for hotel in recently_approved_data:
+            if 'images' in hotel and hotel['images']:
+                hotel['images'] = [f"{base_url}{img}" if not img.startswith('http') else img for img in hotel['images']]
+        
         return Response({
             'count': queryset.count(),
             'status': request.query_params.get('status', 'pending'),
-            'results': serializer.data
+            'results': hotels_data,
+            'recently_verified': {
+                'count': len(recently_approved_data),
+                'hotels': recently_approved_data
+            }
         })
     
     @extend_schema(description="Get detailed hotel information")
     def retrieve(self, request, *args, **kwargs):
         """Get detailed hotel information"""
-        return super().retrieve(request, *args, **kwargs)
+        response = super().retrieve(request, *args, **kwargs)
+        
+        # Convert image paths to full URLs
+        if response.data and 'images' in response.data and response.data['images']:
+            base_url = request.build_absolute_uri('/').rstrip('/')
+            response.data['images'] = [f"{base_url}{img}" if not img.startswith('http') else img for img in response.data['images']]
+        
+        return response
     
     def send_websocket_notification(self, user_id, notification_type, hotel_id, hotel_name, status, reason=None, message=None):
         """
@@ -101,9 +131,16 @@ class HotelVerificationViewSet(viewsets.ReadOnlyModelViewSet):
         )
         
         serializer = self.get_serializer(hotel)
+        hotel_data = serializer.data
+        
+        # Convert image paths to full URLs
+        if 'images' in hotel_data and hotel_data['images']:
+            base_url = request.build_absolute_uri('/').rstrip('/')
+            hotel_data['images'] = [f"{base_url}{img}" if not img.startswith('http') else img for img in hotel_data['images']]
+        
         return Response({
             'message': 'Hotel approved successfully',
-            'hotel': serializer.data
+            'hotel': hotel_data
         }, status=status.HTTP_200_OK)
     
     @extend_schema(
@@ -150,10 +187,17 @@ class HotelVerificationViewSet(viewsets.ReadOnlyModelViewSet):
         )
         
         serializer = self.get_serializer(hotel)
+        hotel_data = serializer.data
+        
+        # Convert image paths to full URLs
+        if 'images' in hotel_data and hotel_data['images']:
+            base_url = request.build_absolute_uri('/').rstrip('/')
+            hotel_data['images'] = [f"{base_url}{img}" if not img.startswith('http') else img for img in hotel_data['images']]
+        
         return Response({
             'message': 'Hotel rejected',
             'reason': reason,
-            'hotel': serializer.data
+            'hotel': hotel_data
         }, status=status.HTTP_200_OK)
     
     @extend_schema(description="Get verification statistics")
@@ -172,3 +216,76 @@ class HotelVerificationViewSet(viewsets.ReadOnlyModelViewSet):
             'total': total_count
         }, status=status.HTTP_200_OK)
 
+
+class ApprovedHotelsListView(APIView):
+    """
+    GET: List all approved hotels with count
+    """
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        responses={200: PendingHotelSerializer(many=True)},
+        tags=['Superadmin'],
+        description="Get all approved hotels with count"
+    )
+    def get(self, request):
+        """
+        List all approved hotels with count
+        Returns:
+            - count: Total number of approved hotels
+            - hotels: List of approved hotels
+        """
+        approved_hotels = Hotel.objects.filter(is_approved='approved').order_by('-created_at')
+        serializer = PendingHotelSerializer(approved_hotels, many=True)
+        
+        hotels_data = serializer.data
+        
+        # Convert image paths to full URLs
+        base_url = request.build_absolute_uri('/').rstrip('/')
+        for hotel in hotels_data:
+            if 'images' in hotel and hotel['images']:
+                hotel['images'] = [f"{base_url}{img}" if not img.startswith('http') else img for img in hotel['images']]
+        
+        return Response({
+            'count': approved_hotels.count(),
+            'hotels': hotels_data
+        }, status=status.HTTP_200_OK)
+
+
+class ApprovedHotelDetailView(APIView):
+    """
+    GET: View a single approved hotel by ID
+    """
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        responses={200: PendingHotelSerializer},
+        tags=['Superadmin'],
+        description="Get detailed information of a single approved hotel"
+    )
+    def get(self, request, pk):
+        """
+        Get detailed information of a single approved hotel
+        Args:
+            pk: Hotel ID
+        Returns:
+            - hotel: Detailed hotel information
+        """
+        try:
+            hotel = Hotel.objects.get(id=pk, is_approved='approved')
+            serializer = PendingHotelSerializer(hotel)
+            
+            hotel_data = serializer.data
+            
+            # Convert image paths to full URLs
+            if 'images' in hotel_data and hotel_data['images']:
+                base_url = request.build_absolute_uri('/').rstrip('/')
+                hotel_data['images'] = [f"{base_url}{img}" if not img.startswith('http') else img for img in hotel_data['images']]
+            
+            return Response({
+                'hotel': hotel_data
+            }, status=status.HTTP_200_OK)
+        except Hotel.DoesNotExist:
+            return Response({
+                'error': 'Approved hotel not found'
+            }, status=status.HTTP_404_NOT_FOUND)

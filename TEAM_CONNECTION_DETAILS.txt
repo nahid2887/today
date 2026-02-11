@@ -1,0 +1,67 @@
+🗄️ DATABASE CONNECTION - YOUR TEAM
+
+Your machine IP: 10.10.13.27
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 CONNECTION DETAILS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🖥️  Host: 10.10.13.27
+🔌 Port: 5433
+💾 Database: hotel_db
+👤 Username: hotel_user
+🔐 Password: hotel_pass
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 CONNECTION STRING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+postgresql://hotel_user:hotel_pass@10.10.13.27:5433/hotel_db
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🛠️  QUICK CONNECT EXAMPLES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Command Line (psql):
+psql -h 10.10.13.27 -p 5433 -U hotel_user -d hotel_db
+Password: hotel_pass
+
+pgAdmin / DBeaver Setup:
+Host: 10.10.13.27
+Port: 5433
+Database: hotel_db
+Username: hotel_user
+Password: hotel_pass
+
+Python (psycopg2):
+import psycopg2
+conn = psycopg2.connect(
+    host="10.10.13.27",
+    port="5433",
+    database="hotel_db",
+    user="hotel_user",
+    password="hotel_pass"
+)
+
+Node.js (pg):
+const client = new Client({
+  host: '10.10.13.27',
+  port: 5433,
+  database: 'hotel_db',
+  user: 'hotel_user',
+  password: 'hotel_pass',
+});
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🌐 WEB APPLICATION & APIS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Web App: http://10.10.13.27:8000
+API Schema: http://10.10.13.27:8000/api/schema/
+API Docs: http://10.10.13.27:8000/api/docs/
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ READY TO USE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Your teammates can now connect to the database from any computer on the network!

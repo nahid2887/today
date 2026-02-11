@@ -61,14 +61,16 @@ class UserRegistrationView(APIView):
             refresh = RefreshToken.for_user(user)
             access = refresh.access_token
             
+            # Combine first_name and last_name into full_name
+            full_name = f"{user.first_name} {user.last_name}".strip()
+            
             return Response({
                 'message': 'User registered successfully',
                 'user': {
                     'id': user.id,
                     'username': user.username,
                     'email': user.email,
-                    'first_name': user.first_name,
-                    'last_name': user.last_name,
+                    'full_name': full_name,
                 },
                 'access_token': str(access),
                 'refresh_token': str(refresh),
@@ -184,7 +186,8 @@ class PartnerRegistrationView(APIView):
 
 class UserLoginView(APIView):
     """
-    Login user (Traveler or Partner) and return access token and refresh token.
+    Login user (Traveler or Partner) with email and password.
+    Returns access token and refresh token.
     """
     
     @extend_schema(
@@ -192,26 +195,35 @@ class UserLoginView(APIView):
             'application/json': {
                 'type': 'object',
                 'properties': {
-                    'username': {'type': 'string', 'description': 'Username'},
+                    'email': {'type': 'string', 'description': 'Email address'},
                     'password': {'type': 'string', 'description': 'Password'}
                 },
-                'required': ['username', 'password']
+                'required': ['email', 'password']
             }
         },
         responses={200: OpenApiResponse(description="Login successful")},
         tags=['Authentication'],
-        description="Login with username and password"
+        description="Login with email and password"
     )
     def post(self, request):
-        username = request.data.get('username')
+        email = request.data.get('email')
         password = request.data.get('password')
         
-        if not username or not password:
+        if not email or not password:
             return Response({
-                'error': 'Username and password are required'
+                'error': 'Email and password are required'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        user = authenticate(username=username, password=password)
+        # Get user by email
+        try:
+            user_obj = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({
+                'error': 'Invalid credentials'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        # Authenticate with username
+        user = authenticate(username=user_obj.username, password=password)
         
         if user is None:
             return Response({
@@ -226,13 +238,10 @@ class UserLoginView(APIView):
         profile_type = 'unknown'
         profile_data = {}
         
-        # Check if user is admin/staff
-        if user.is_staff or user.is_superuser:
+        # Check if user is superuser/admin
+        if user.is_superuser or user.is_staff:
             profile_type = 'admin'
-            profile_data = {
-                'is_staff': user.is_staff,
-                'is_superuser': user.is_superuser,
-            }
+            profile_data = {'profile_type': 'admin', 'is_staff': user.is_staff, 'is_superuser': user.is_superuser}
         elif hasattr(user, 'traveler_profile'):
             profile_type = 'traveler'
             profile_data = {'profile_type': user.traveler_profile.profile_type}
@@ -245,12 +254,16 @@ class UserLoginView(APIView):
                 'role': partner.role,
             }
         
+        # Combine first_name and last_name into full_name
+        full_name = f"{user.first_name} {user.last_name}".strip()
+        
         return Response({
             'message': 'Login successful',
             'user': {
                 'id': user.id,
                 'username': user.username,
                 'email': user.email,
+                'full_name': full_name,
                 'profile_type': profile_type,
             },
             'access_token': str(access),
@@ -286,14 +299,7 @@ class EmailLoginView(APIView):
             profile_type = 'unknown'
             profile_data = {}
             
-            # Check if user is admin/staff
-            if user.is_staff or user.is_superuser:
-                profile_type = 'admin'
-                profile_data = {
-                    'is_staff': user.is_staff,
-                    'is_superuser': user.is_superuser,
-                }
-            elif hasattr(user, 'traveler_profile'):
+            if hasattr(user, 'traveler_profile'):
                 profile_type = 'traveler'
                 profile_data = {
                     'profile_type': user.traveler_profile.profile_type,
@@ -600,25 +606,16 @@ class PartnerProfileView(APIView):
 
 class TravelerTermsView(APIView):
     """
-    GET: Retrieve traveler terms & conditions (for travelers)
+    GET: Retrieve traveler terms & conditions (publicly accessible)
     PATCH: Update traveler terms & conditions (admin only)
     """
-    permission_classes = [IsAuthenticated]
     
     @extend_schema(
         responses={200: OpenApiResponse(description="Traveler terms & conditions retrieved")},
         tags=['Traveler Info'],
-        description="Get traveler terms & conditions (accessible by travelers)"
+        description="Get traveler terms & conditions (publicly accessible - no authentication required)"
     )
     def get(self, request):
-        user = request.user
-        
-        # Check if user is a traveler
-        if not hasattr(user, 'traveler_profile'):
-            return Response({
-                'error': 'Access denied. Only travelers can view this information.'
-            }, status=status.HTTP_403_FORBIDDEN)
-        
         # Get or create the singleton instance
         traveler_info, created = TravelerInfo.objects.get_or_create(id=1)
         
@@ -637,8 +634,8 @@ class TravelerTermsView(APIView):
     def patch(self, request):
         user = request.user
         
-        # Check if user is admin
-        if not user.is_staff:
+        # Check if user is authenticated and is admin
+        if not user.is_authenticated or not user.is_staff:
             return Response({
                 'error': 'Access denied. Only admins can update this information.'
             }, status=status.HTTP_403_FORBIDDEN)
@@ -656,25 +653,16 @@ class TravelerTermsView(APIView):
 
 class TravelerPrivacyView(APIView):
     """
-    GET: Retrieve traveler privacy policy (for travelers)
+    GET: Retrieve traveler privacy policy (publicly accessible)
     PATCH: Update traveler privacy policy (admin only)
     """
-    permission_classes = [IsAuthenticated]
     
     @extend_schema(
         responses={200: OpenApiResponse(description="Traveler privacy policy retrieved")},
         tags=['Traveler Info'],
-        description="Get traveler privacy policy (accessible by travelers)"
+        description="Get traveler privacy policy (publicly accessible - no authentication required)"
     )
     def get(self, request):
-        user = request.user
-        
-        # Check if user is a traveler
-        if not hasattr(user, 'traveler_profile'):
-            return Response({
-                'error': 'Access denied. Only travelers can view this information.'
-            }, status=status.HTTP_403_FORBIDDEN)
-        
         # Get or create the singleton instance
         traveler_info, created = TravelerInfo.objects.get_or_create(id=1)
         
@@ -693,8 +681,8 @@ class TravelerPrivacyView(APIView):
     def patch(self, request):
         user = request.user
         
-        # Check if user is admin
-        if not user.is_staff:
+        # Check if user is authenticated and is admin
+        if not user.is_authenticated or not user.is_staff:
             return Response({
                 'error': 'Access denied. Only admins can update this information.'
             }, status=status.HTTP_403_FORBIDDEN)

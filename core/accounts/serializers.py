@@ -40,8 +40,7 @@ class UserRegistrationSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
     password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
     password_confirm = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
-    first_name = serializers.CharField(max_length=150, required=True)
-    last_name = serializers.CharField(max_length=150, required=True)
+    full_name = serializers.CharField(max_length=255, required=True)
 
     def validate(self, data):
         if data['password'] != data.pop('password_confirm'):
@@ -64,12 +63,18 @@ class UserRegistrationSerializer(serializers.Serializer):
                 counter += 1
             username = f"{username}{counter}"
         
+        # Split full_name into first_name and last_name
+        full_name = validated_data['full_name'].strip()
+        name_parts = full_name.split(' ', 1)
+        first_name = name_parts[0] if len(name_parts) > 0 else ''
+        last_name = name_parts[1] if len(name_parts) > 1 else ''
+        
         user = User.objects.create_user(
             username=username,
             email=validated_data['email'],
             password=validated_data['password'],
-            first_name=validated_data['first_name'],
-            last_name=validated_data['last_name']
+            first_name=first_name[:150],
+            last_name=last_name[:150]
         )
         
         # Create traveler profile automatically
@@ -79,19 +84,32 @@ class UserRegistrationSerializer(serializers.Serializer):
 
 
 class PartnerProfileSerializer(serializers.ModelSerializer):
+    profile_picture_url = serializers.SerializerMethodField()
+    
     class Meta:
         model = PartnerProfile
         fields = ['profile_type', 'property_name', 'property_address', 'website_url', 
-                  'contact_person_name', 'phone_number', 'role', 'special_deals_offers', 'profile_picture']
+                  'contact_person_name', 'phone_number', 'role', 'special_deals_offers', 'profile_picture', 'profile_picture_url']
         read_only_fields = ['profile_type']
+    
+    def get_profile_picture_url(self, obj):
+        """Get full URL for profile picture"""
+        if obj.profile_picture:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.profile_picture.url)
+            return obj.profile_picture.url
+        return None
 
 
 class PartnerProfileUpdateSerializer(serializers.ModelSerializer):
     """Serializer for updating partner profile (PATCH)"""
+    profile_picture_url = serializers.SerializerMethodField()
+    
     class Meta:
         model = PartnerProfile
         fields = ['property_name', 'property_address', 'website_url', 
-                  'contact_person_name', 'phone_number', 'role', 'special_deals_offers', 'profile_picture']
+                  'contact_person_name', 'phone_number', 'role', 'special_deals_offers', 'profile_picture', 'profile_picture_url']
         extra_kwargs = {
             'property_name': {'required': False},
             'property_address': {'required': False},
@@ -99,6 +117,15 @@ class PartnerProfileUpdateSerializer(serializers.ModelSerializer):
             'phone_number': {'required': False},
             'role': {'required': False},
         }
+    
+    def get_profile_picture_url(self, obj):
+        """Get full URL for profile picture"""
+        if obj.profile_picture:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.profile_picture.url)
+            return obj.profile_picture.url
+        return None
 
 
 class PartnerRegistrationStep1Serializer(serializers.Serializer):
