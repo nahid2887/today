@@ -110,7 +110,6 @@ class Hotel(models.Model):
         self.save()
 
 
-<<<<<<< HEAD
 class Booking(models.Model):
     """Hotel booking model - Travelers can book hotels with automatic price calculation"""
     
@@ -200,7 +199,45 @@ class Booking(models.Model):
         blank=True,
         null=True,
         help_text="Special requests from the traveler"
-=======
+    )
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Hotel Booking"
+        verbose_name_plural = "Hotel Bookings"
+        ordering = ['-created_at']
+    
+
+    def __str__(self):
+        return f"{self.traveler.username} - {self.hotel.hotel_name} ({self.check_in_date} to {self.check_out_date})"
+    
+    def calculate_total_price(self):
+        """Calculate total price based on number of nights and price per night"""
+        from datetime import datetime
+        check_in = datetime.strptime(str(self.check_in_date), '%Y-%m-%d').date() if isinstance(self.check_in_date, str) else self.check_in_date
+        check_out = datetime.strptime(str(self.check_out_date), '%Y-%m-%d').date() if isinstance(self.check_out_date, str) else self.check_out_date
+        
+        nights = (check_out - check_in).days
+        self.number_of_nights = max(nights, 1)
+        self.total_price = self.price_per_night * self.number_of_nights
+        
+        # Calculate discount
+        if self.discount_percentage > 0:
+            self.discount_amount = (self.total_price * self.discount_percentage) / 100
+            self.final_price = self.total_price - self.discount_amount
+        else:
+            self.discount_amount = 0
+            self.final_price = self.total_price
+    
+    def save(self, *args, **kwargs):
+        """Override save to calculate pricing"""
+        self.calculate_total_price()
+        super().save(*args, **kwargs)
+
+
 class SpecialOffer(models.Model):
     """Special promotional offers for hotels"""
     
@@ -235,7 +272,6 @@ class SpecialOffer(models.Model):
     is_active = models.BooleanField(
         default=True,
         help_text="Whether this offer is currently active"
->>>>>>> 25b4413610ab56532672901829a009d3cea036ca
     )
     
     # Timestamps
@@ -243,37 +279,6 @@ class SpecialOffer(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-<<<<<<< HEAD
-        verbose_name = "Hotel Booking"
-        verbose_name_plural = "Hotel Bookings"
-        ordering = ['-created_at']
-    
-    def __str__(self):
-        return f"{self.traveler.username} - {self.hotel.hotel_name} ({self.check_in_date} to {self.check_out_date})"
-    
-    def calculate_total_price(self):
-        """Calculate total price based on number of nights and price per night"""
-        from datetime import datetime
-        check_in = datetime.strptime(str(self.check_in_date), '%Y-%m-%d').date() if isinstance(self.check_in_date, str) else self.check_in_date
-        check_out = datetime.strptime(str(self.check_out_date), '%Y-%m-%d').date() if isinstance(self.check_out_date, str) else self.check_out_date
-        
-        nights = (check_out - check_in).days
-        self.number_of_nights = max(nights, 1)
-        self.total_price = self.price_per_night * self.number_of_nights
-        
-        # Calculate discount
-        if self.discount_percentage > 0:
-            self.discount_amount = (self.total_price * self.discount_percentage) / 100
-            self.final_price = self.total_price - self.discount_amount
-        else:
-            self.discount_amount = 0
-            self.final_price = self.total_price
-    
-    def save(self, *args, **kwargs):
-        """Override save to calculate pricing"""
-        self.calculate_total_price()
-        super().save(*args, **kwargs)
-=======
         verbose_name = "Special Offer"
         verbose_name_plural = "Special Offers"
         ordering = ['-created_at']
@@ -285,4 +290,3 @@ class SpecialOffer(models.Model):
         """Check if offer is still valid"""
         from django.utils import timezone
         return self.is_active and self.valid_until >= timezone.now().date()
->>>>>>> 25b4413610ab56532672901829a009d3cea036ca

@@ -1,41 +1,54 @@
 from django.urls import path
 from .views import (
-<<<<<<< HEAD
-    HotelView, HotelUpdateView,
-    BookingCreateView, BookingListView, BookingDetailView
-=======
-    HotelView, SpecialOfferView, SpecialOfferDetailView, HotelDetailView,
-    HotelBulkSyncView, HotelRealTimeDetailView, HotelImageUploadView
->>>>>>> 25b4413610ab56532672901829a009d3cea036ca
+    HotelView,
+    HotelDetailView,
+    SpecialOfferView,
+    SpecialOfferDetailView,
+    # Booking - Traveler
+    BookingCreateView,
+    BookingListView,
+    BookingDetailView,
+    # Booking - Partner Manager
+    PartnerBookingsView,
+    # Analytics
+    PartnerAnalyticsView,
+    PartnerDashboardView,
+    # AI System
+    HotelBulkSyncView,
+    HotelRealTimeDetailView,
+    # Image Upload
+    HotelImageUploadView
 )
 
 app_name = 'hotel'
 
 urlpatterns = [
-<<<<<<< HEAD
-    path('', HotelView.as_view(), name='hotel'),  # GET and POST
-    path('update/', HotelUpdateView.as_view(), name='hotel_update'),  # PATCH
-    
-    # Hotel Booking Endpoints (3 APIs)
-    path('bookings/create/', BookingCreateView.as_view(), name='booking_create'),  # POST
-    path('bookings/', BookingListView.as_view(), name='booking_list'),  # GET list
-    path('bookings/<int:booking_id>/', BookingDetailView.as_view(), name='booking_detail'),  # GET single
-=======
-    # Partner Hotel Management
-    path('', HotelView.as_view(), name='hotel'),  # GET and PATCH only
+    # ========== PARTNER HOTEL MANAGEMENT ==========
+    path('', HotelView.as_view(), name='hotel'),  # GET and PATCH
     path('<int:pk>/', HotelDetailView.as_view(), name='hotel_detail'),  # GET hotel details with offers
+    path('upload-image/', HotelImageUploadView.as_view(), name='upload_image'),  # POST - Upload image
     
-    # Image Upload
-    path('upload-image/', HotelImageUploadView.as_view(), name='upload_image'),  # POST - Upload image file
-    
-    # Special Offers
+    # ========== SPECIAL OFFERS ==========
     path('special-offers/', SpecialOfferView.as_view(), name='special_offers'),  # GET and POST
     path('special-offers/<int:pk>/', SpecialOfferDetailView.as_view(), name='special_offer_detail'),  # GET and PATCH
     
-    # AI System Endpoints
+    # ========== TRAVELER BOOKING ENDPOINTS ==========
+    path('bookings/create/', BookingCreateView.as_view(), name='booking_create'),  # POST - Create booking
+    path('bookings/', BookingListView.as_view(), name='booking_list'),  # GET - Traveler's bookings
+    path('bookings/<int:booking_id>/', BookingDetailView.as_view(), name='booking_detail'),  # GET/PATCH/DELETE
+    
+    # ========== PARTNER BOOKING MANAGEMENT ==========
+    # Single unified endpoint for hotel managers to see all bookings for their hotel
+    path('manager/bookings/', PartnerBookingsView.as_view(), name='partner_bookings'),  # GET - Hotel manager's bookings
+    
+    # ========== PARTNER ANALYTICS ==========
+    path('manager/analytics/', PartnerAnalyticsView.as_view(), name='partner_analytics'),  # GET - Hotel analytics & metrics
+    path('manager/dashboard/', PartnerDashboardView.as_view(), name='partner_dashboard'),  # GET - Dashboard data (independent page)
+    
+    # ========== AI SYSTEM ENDPOINTS ==========
     path('sync/', HotelBulkSyncView.as_view(), name='hotel_bulk_sync'),  # GET - Bulk sync for RAG
     path('ai/details/<int:hotel_id>/', HotelRealTimeDetailView.as_view(), name='hotel_realtime_detail'),  # GET - Real-time details
->>>>>>> 25b4413610ab56532672901829a009d3cea036ca
 ]
+
 
 

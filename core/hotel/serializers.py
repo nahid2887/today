@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Hotel, Booking
+from .models import Hotel, Booking, SpecialOffer
 from django.contrib.auth.models import User
 
 
@@ -175,7 +175,6 @@ class HotelListSerializer(serializers.ModelSerializer):
         ]
 
 
-<<<<<<< HEAD
 class BookingCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating new bookings with automatic price calculation"""
     
@@ -237,11 +236,12 @@ class BookingListSerializer(serializers.ModelSerializer):
     hotel_name = serializers.CharField(source='hotel.hotel_name', read_only=True)
     hotel_city = serializers.CharField(source='hotel.city', read_only=True)
     traveler_name = serializers.CharField(source='traveler.first_name', read_only=True)
+    traveler_email = serializers.CharField(source='traveler.email', read_only=True)
     
     class Meta:
         model = Booking
         fields = [
-            'id', 'hotel', 'hotel_name', 'hotel_city', 'traveler_name',
+            'id', 'hotel', 'hotel_name', 'hotel_city', 'traveler_name', 'traveler_email',
             'check_in_date', 'check_out_date', 'number_of_guests',
             'number_of_nights', 'price_per_night', 'total_price',
             'final_price', 'status', 'created_at'
@@ -300,7 +300,8 @@ class BookingUpdateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("This hotel is not available for the selected dates")
         
         return data
-=======
+
+
 class SpecialOfferSerializer(serializers.ModelSerializer):
     """Serializer for creating and managing special offers"""
     hotel_name = serializers.CharField(source='hotel.hotel_name', read_only=True)
@@ -314,13 +315,13 @@ class SpecialOfferSerializer(serializers.ModelSerializer):
     )
     
     class Meta:
-        model = Hotel.special_offers.rel.related_model  # SpecialOffer model
+        model = SpecialOffer
         fields = [
             'id', 'hotel', 'hotel_name', 'discount_percentage', 
             'special_perks', 'valid_until', 'is_active',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'hotel', 'hotel_name', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'hotel_name', 'created_at', 'updated_at']
     
     def validate_discount_percentage(self, value):
         """Ensure discount is between 1 and 100"""
@@ -349,7 +350,7 @@ class SpecialOfferListSerializer(serializers.ModelSerializer):
     )
     
     class Meta:
-        model = Hotel.special_offers.rel.related_model  # SpecialOffer model
+        model = SpecialOffer
         fields = [
             'id', 'hotel_name', 'discount_percentage', 
             'special_perks', 'valid_until', 'is_active'
@@ -440,6 +441,3 @@ class HotelDetailSerializer(serializers.ModelSerializer):
             valid_until__gte=timezone.now().date()
         )
         return SpecialOfferListSerializer(offers, many=True).data
-
-
->>>>>>> 25b4413610ab56532672901829a009d3cea036ca

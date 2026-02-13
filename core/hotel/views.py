@@ -1,30 +1,20 @@
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-<<<<<<< HEAD
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.parsers import MultiPartParser, FormParser
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter
-from .models import Hotel, Booking
+from .models import Hotel, Booking, SpecialOffer
 from .serializers import (
     HotelSerializer, HotelUpdateSerializer, HotelListSerializer,
     BookingCreateSerializer, BookingListSerializer, BookingDetailSerializer,
-    BookingUpdateSerializer
+    BookingUpdateSerializer, SpecialOfferSerializer, SpecialOfferListSerializer, 
+    HotelDetailSerializer, HotelBulkSyncSerializer, HotelRealTimeDetailSerializer
 )
 from datetime import datetime, timedelta
 from django.utils import timezone
-=======
-from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework.parsers import MultiPartParser, FormParser
-from drf_spectacular.utils import extend_schema, OpenApiResponse
-from .models import Hotel, SpecialOffer
-from .serializers import (
-    HotelSerializer, HotelUpdateSerializer, HotelListSerializer,
-    SpecialOfferSerializer, SpecialOfferListSerializer, HotelDetailSerializer,
-    HotelBulkSyncSerializer, HotelRealTimeDetailSerializer
-)
 import os
 from django.conf import settings
->>>>>>> 25b4413610ab56532672901829a009d3cea036ca
 
 
 class HotelView(APIView):
@@ -393,162 +383,22 @@ class SpecialOfferDetailView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-<<<<<<< HEAD
 class BookingCreateView(APIView):
     """
     POST: Create a new hotel booking (Travelers only)
     Automatically calculates price based on hotel price per night and number of nights
-=======
-class HotelDetailView(APIView):
-    """
-    GET: Retrieve detailed hotel information with special offers
->>>>>>> 25b4413610ab56532672901829a009d3cea036ca
     """
     permission_classes = [IsAuthenticated]
     
     @extend_schema(
-<<<<<<< HEAD
         request=BookingCreateSerializer,
         responses={201: BookingDetailSerializer},
         tags=['Hotel Booking'],
         description="Create a new hotel booking with automatic price calculation"
-=======
-        responses={200: HotelDetailSerializer},
-        tags=['Hotel'],
-        description="Get detailed hotel information including active special offers"
-    )
-    def get(self, request, pk):
-        """
-        Get hotel details with active special offers
-        Only approved hotels are visible to non-partners
-        """
-        try:
-            hotel = Hotel.objects.get(pk=pk)
-            
-            # Check if user is the hotel owner or if hotel is approved
-            user = request.user
-            is_owner = hasattr(user, 'partner_profile') and hotel.partner == user
-            
-            if not is_owner and hotel.is_approved != 'approved':
-                return Response({
-                    'error': 'Hotel not found or not available'
-                }, status=status.HTTP_404_NOT_FOUND)
-            
-            serializer = HotelDetailSerializer(hotel)
-            return Response({
-                'message': 'Hotel details retrieved successfully',
-                'hotel': serializer.data
-            }, status=status.HTTP_200_OK)
-            
-        except Hotel.DoesNotExist:
-            return Response({
-                'error': 'Hotel not found'
-            }, status=status.HTTP_404_NOT_FOUND)
-
-
-class HotelBulkSyncView(APIView):
-    """
-    GET: Bulk sync endpoint for RAG system
-    Purpose: Provides all static hotel information used for embeddings.
-    Data: hotel_id, hotel_name, description, location_details, amenities, etc.
-    Note: Includes last_updated timestamp for incremental updates via cron job
-    """
-    permission_classes = [AllowAny]  # Allow AI system to access without auth
-    
-    @extend_schema(
-        responses={200: HotelBulkSyncSerializer(many=True)},
-        tags=['AI System'],
-        description="Bulk sync endpoint for RAG system - Returns all approved hotels with static data"
-    )
-    def get(self, request):
-        """
-        Get all approved hotels with static information for RAG embeddings.
-        Supports optional 'since' parameter for incremental syncs.
-        """
-        # Get all approved hotels
-        hotels = Hotel.objects.filter(is_approved='approved').order_by('id')
-        
-        # Optional: Filter by last_updated timestamp for incremental syncs
-        since = request.query_params.get('since')
-        if since:
-            try:
-                from django.utils import timezone
-                from datetime import datetime
-                since_datetime = datetime.fromisoformat(since)
-                hotels = hotels.filter(updated_at__gte=since_datetime)
-            except (ValueError, TypeError):
-                pass  # Ignore invalid timestamp format
-        
-        serializer = HotelBulkSyncSerializer(hotels, many=True)
-        hotels_data = serializer.data
-        
-        # Convert image paths to full URLs
-        base_url = request.build_absolute_uri('/').rstrip('/')
-        for hotel in hotels_data:
-            if 'images' in hotel and hotel['images']:
-                hotel['images'] = [f"{base_url}{img}" if not img.startswith('http') else img for img in hotel['images']]
-        
-        return Response({
-            'message': f'Synced {hotels.count()} approved hotels',
-            'count': hotels.count(),
-            'hotels': hotels_data
-        }, status=status.HTTP_200_OK)
-
-
-class HotelRealTimeDetailView(APIView):
-    """
-    GET: Real-time detail endpoint for AI verification
-    Purpose: Returns volatile data (prices, availability, offers) for on-the-fly verification.
-    Data: base_price_per_night, active_special_offers, commission_tier, current_availability
-    Note: Must be high-performance as AI calls this during chat to verify current state
-    """
-    permission_classes = [AllowAny]  # Allow AI system to access without auth
-    
-    @extend_schema(
-        responses={200: HotelRealTimeDetailSerializer},
-        tags=['AI System'],
-        description="Real-time detail endpoint for AI verification - Returns current prices and offers"
-    )
-    def get(self, request, hotel_id):
-        """
-        Get real-time hotel details for AI verification.
-        Only returns approved hotels to prevent outdated information from being served.
-        """
-        try:
-            hotel = Hotel.objects.get(id=hotel_id, is_approved='approved')
-            serializer = HotelRealTimeDetailSerializer(hotel)
-            
-            return Response({
-                'message': 'Hotel details retrieved successfully',
-                'hotel': serializer.data
-            }, status=status.HTTP_200_OK)
-            
-        except Hotel.DoesNotExist:
-            return Response({
-                'error': 'Hotel not found or not approved',
-                'hotel_id': hotel_id
-            }, status=status.HTTP_404_NOT_FOUND)
-
-
-class HotelImageUploadView(APIView):
-    """
-    Upload hotel images
-    POST: Upload a single image file
-    """
-    permission_classes = [IsAuthenticated]
-    parser_classes = (MultiPartParser, FormParser)
-    
-    @extend_schema(
-        request=None,
-        responses={200: {'description': 'Image uploaded successfully'}},
-        tags=['Hotel'],
-        description="Upload an image file for hotel - Returns image URL to add to images array"
->>>>>>> 25b4413610ab56532672901829a009d3cea036ca
     )
     def post(self, request):
         user = request.user
         
-<<<<<<< HEAD
         # Check if user is a traveler
         if not hasattr(user, 'traveler_profile'):
             return Response({
@@ -779,7 +629,677 @@ class BookingDetailView(APIView):
                 'check_in_date': check_in,
                 'status': 'cancelled'
             }
-=======
+        }, status=status.HTTP_200_OK)
+
+
+# ============================================
+# PARTNER BOOKINGS VIEW - FOR HOTEL MANAGERS
+# ============================================
+
+class PartnerBookingsView(APIView):
+    """
+    GET: List all bookings for the partner's hotel with optional filtering
+    Single unified view for hotel managers to see their complete booking list and details
+    
+    Query Parameters:
+    - status: Filter by booking status (pending, confirmed, cancelled, completed)
+    - hotel_id: Optional hotel ID (useful if partner manages multiple hotels)
+    - booking_id: Get details of a specific booking
+    - date_from: Filter bookings from this date onwards (YYYY-MM-DD)
+    - date_to: Filter bookings until this date (YYYY-MM-DD)
+    - guest_name: Search by guest/traveler name
+    """
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name='status',
+                description='Filter by booking status: pending, confirmed, cancelled, completed',
+                required=False,
+                type=str,
+                enum=['pending', 'confirmed', 'cancelled', 'completed']
+            ),
+            OpenApiParameter(
+                name='booking_id',
+                description='Get details of a specific booking',
+                required=False,
+                type=int,
+            ),
+            OpenApiParameter(
+                name='date_from',
+                description='Filter bookings from this date onwards (YYYY-MM-DD)',
+                required=False,
+                type=str,
+            ),
+            OpenApiParameter(
+                name='date_to',
+                description='Filter bookings until this date (YYYY-MM-DD)',
+                required=False,
+                type=str,
+            ),
+            OpenApiParameter(
+                name='guest_name',
+                description='Search by guest/traveler name',
+                required=False,
+                type=str,
+            ),
+        ],
+        responses={200: BookingListSerializer(many=True)},
+        tags=['Hotel Management'],
+        description="List all bookings for hotel manager's hotel with optional filtering"
+    )
+    def get(self, request):
+        user = request.user
+        
+        # Check if user is a partner
+        if not hasattr(user, 'partner_profile'):
+            return Response({
+                'error': 'Only hotel partners can access this endpoint',
+                'detail': 'You must be a registered hotel partner to view bookings'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Get partner's hotel
+        try:
+            hotel = Hotel.objects.get(partner=user)
+        except Hotel.DoesNotExist:
+            return Response({
+                'error': 'No hotel found for this partner',
+                'detail': 'Your hotel should have been auto-created with your partner account'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Get query parameters
+        booking_id = request.query_params.get('booking_id')
+        status_filter = request.query_params.get('status')
+        date_from = request.query_params.get('date_from')
+        date_to = request.query_params.get('date_to')
+        guest_name = request.query_params.get('guest_name')
+        
+        # Start with all bookings for this hotel
+        bookings = Booking.objects.filter(hotel=hotel).order_by('-created_at')
+        
+        # If specific booking_id is requested, return detailed view of single booking
+        if booking_id:
+            try:
+                booking = Booking.objects.get(id=booking_id, hotel=hotel)
+                serializer = BookingDetailSerializer(booking)
+                return Response({
+                    'message': 'Booking details retrieved successfully',
+                    'hotel_id': hotel.id,
+                    'hotel_name': hotel.hotel_name,
+                    'booking': serializer.data
+                }, status=status.HTTP_200_OK)
+            except Booking.DoesNotExist:
+                return Response({
+                    'error': 'Booking not found or does not belong to this hotel'
+                }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Apply status filter
+        if status_filter:
+            bookings = bookings.filter(status=status_filter)
+        
+        # Apply date filters
+        if date_from:
+            try:
+                from_date = datetime.strptime(date_from, '%Y-%m-%d').date()
+                bookings = bookings.filter(check_in_date__gte=from_date)
+            except ValueError:
+                return Response({
+                    'error': 'Invalid date format for date_from. Use YYYY-MM-DD'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if date_to:
+            try:
+                to_date = datetime.strptime(date_to, '%Y-%m-%d').date()
+                bookings = bookings.filter(check_out_date__lte=to_date)
+            except ValueError:
+                return Response({
+                    'error': 'Invalid date format for date_to. Use YYYY-MM-DD'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Apply guest name filter
+        if guest_name:
+            bookings = bookings.filter(traveler__first_name__icontains=guest_name) | \
+                      bookings.filter(traveler__last_name__icontains=guest_name) | \
+                      bookings.filter(traveler__username__icontains=guest_name)
+        
+        # Calculate some useful statistics
+        total_bookings = bookings.count()
+        confirmed_bookings = bookings.filter(status='confirmed').count()
+        pending_bookings = bookings.filter(status='pending').count()
+        cancelled_bookings = bookings.filter(status='cancelled').count()
+        completed_bookings = bookings.filter(status='completed').count()
+        
+        # Calculate total revenue from confirmed and completed bookings
+        total_revenue = 0
+        for booking in bookings.filter(status__in=['confirmed', 'completed']):
+            total_revenue += float(booking.final_price)
+        
+        # Serialize bookings
+        serializer = BookingListSerializer(bookings, many=True)
+        
+        return Response({
+            'message': f'Retrieved {total_bookings} booking(s) for hotel: {hotel.hotel_name}',
+            'hotel_id': hotel.id,
+            'hotel_name': hotel.hotel_name,
+            'statistics': {
+                'total_bookings': total_bookings,
+                'pending': pending_bookings,
+                'confirmed': confirmed_bookings,
+                'cancelled': cancelled_bookings,
+                'completed': completed_bookings,
+                'total_revenue': f'${total_revenue:.2f}'
+            },
+            'filters_applied': {
+                'status': status_filter,
+                'date_from': date_from,
+                'date_to': date_to,
+                'guest_name': guest_name
+            },
+            'results': serializer.data
+        }, status=status.HTTP_200_OK)
+
+
+# ============================================
+# PARTNER ANALYTICS VIEW
+# ============================================
+
+class PartnerAnalyticsView(APIView):
+    """
+    GET: Get analytics and insights for partner's hotel
+    Provides: Booking rate, total guests, avg rating, weekly traffic, revenue metrics
+    """
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name='period',
+                description='Analytics period: this_month, last_month, last_7_days, last_30_days',
+                required=False,
+                type=str,
+                enum=['this_month', 'last_month', 'last_7_days', 'last_30_days']
+            ),
+        ],
+        tags=['Analytics'],
+        description="Get hotel analytics and performance metrics"
+    )
+    def get(self, request):
+        user = request.user
+        
+        # Check if user is a partner
+        if not hasattr(user, 'partner_profile'):
+            return Response({
+                'error': 'Only hotel partners can access analytics'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Get partner's hotel
+        try:
+            hotel = Hotel.objects.get(partner=user)
+        except Hotel.DoesNotExist:
+            return Response({
+                'error': 'No hotel found for this partner'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Get period parameter (default: this_month)
+        period = request.query_params.get('period', 'this_month')
+        
+        # Calculate date range
+        now = timezone.now()
+        today = now.date()
+        
+        if period == 'last_month':
+            start_date = (now - timedelta(days=30)).date()
+            end_date = today
+            period_label = 'Last month'
+        elif period == 'last_7_days':
+            start_date = (now - timedelta(days=7)).date()
+            end_date = today
+            period_label = 'Last 7 days'
+        elif period == 'last_30_days':
+            start_date = (now - timedelta(days=30)).date()
+            end_date = today
+            period_label = 'Last 30 days'
+        else:  # this_month (default)
+            start_date = today.replace(day=1)
+            end_date = today
+            period_label = 'This month'
+        
+        # Get all bookings for this hotel in period
+        bookings = Booking.objects.filter(
+            hotel=hotel,
+            created_at__date__gte=start_date,
+            created_at__date__lte=end_date
+        )
+        
+        confirmed_bookings = bookings.filter(status__in=['confirmed', 'completed'])
+        
+        # ===== METRIC 1: BOOKING RATE =====
+        # Calculate days with bookings vs total days
+        total_days = (end_date - start_date).days + 1
+        days_with_bookings = bookings.filter(status__in=['confirmed', 'completed']).values('created_at__date').distinct().count()
+        booking_rate = (days_with_bookings / total_days * 100) if total_days > 0 else 0
+        
+        # ===== METRIC 2: TOTAL GUESTS =====
+        total_guests = sum(booking.number_of_guests for booking in confirmed_bookings)
+        
+        # ===== METRIC 3: AVERAGE RATING =====
+        avg_rating = float(hotel.average_rating) if hotel.average_rating else 0.0
+        total_ratings = hotel.total_ratings
+        
+        # ===== METRIC 4: WEEKLY TRAFFIC =====
+        # Bookings by day of week (Mon=0 to Sun=6)
+        weekly_traffic = {
+            'Monday': 0,
+            'Tuesday': 0,
+            'Wednesday': 0,
+            'Thursday': 0,
+            'Friday': 0,
+            'Saturday': 0,
+            'Sunday': 0
+        }
+        
+        day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+        
+        for booking in confirmed_bookings:
+            # Count bookings that were active on each day of week
+            current_date = booking.check_in_date
+            while current_date < booking.check_out_date:
+                day_name = day_names[current_date.weekday()]
+                weekly_traffic[day_name] += 1
+                current_date += timedelta(days=1)
+        
+        # ===== METRIC 5: REVENUE =====
+        total_revenue = sum(float(booking.final_price) for booking in confirmed_bookings)
+        avg_booking_value = total_revenue / confirmed_bookings.count() if confirmed_bookings.count() > 0 else 0
+        
+        # ===== METRIC 6: OCCUPANCY =====
+        # Calculate total room-nights available vs booked
+        total_room_nights = hotel.number_of_rooms * total_days
+        booked_room_nights = sum(booking.number_of_nights for booking in confirmed_bookings)
+        occupancy_rate = (booked_room_nights / total_room_nights * 100) if total_room_nights > 0 else 0
+        
+        # ===== METRIC 7: BOOKING STATUS BREAKDOWN =====
+        pending_count = bookings.filter(status='pending').count()
+        confirmed_count = bookings.filter(status='confirmed').count()
+        cancelled_count = bookings.filter(status='cancelled').count()
+        completed_count = bookings.filter(status='completed').count()
+        
+        return Response({
+            'message': f'Analytics for {hotel.hotel_name} ({period_label})',
+            'hotel_id': hotel.id,
+            'hotel_name': hotel.hotel_name,
+            'period': period,
+            'period_label': period_label,
+            'date_range': {
+                'start_date': start_date.isoformat(),
+                'end_date': end_date.isoformat()
+            },
+            'metrics': {
+                'booking_rate': {
+                    'value': round(booking_rate, 1),
+                    'unit': '%',
+                    'description': f'{days_with_bookings} out of {total_days} days had bookings'
+                },
+                'total_guests': {
+                    'value': total_guests,
+                    'unit': 'guests',
+                    'description': f'Total guests in {period_label.lower()}'
+                },
+                'average_rating': {
+                    'value': round(avg_rating, 2),
+                    'unit': '/5',
+                    'description': f'Based on {total_ratings} ratings',
+                    'stars': round(avg_rating)
+                },
+                'occupancy_rate': {
+                    'value': round(occupancy_rate, 1),
+                    'unit': '%',
+                    'description': f'{booked_room_nights} out of {total_room_nights} room-nights booked'
+                },
+                'total_revenue': {
+                    'value': round(total_revenue, 2),
+                    'unit': '$',
+                    'description': f'Revenue from {confirmed_count} confirmed bookings'
+                },
+                'average_booking_value': {
+                    'value': round(avg_booking_value, 2),
+                    'unit': '$',
+                    'description': 'Average price per booking'
+                }
+            },
+            'weekly_traffic': weekly_traffic,
+            'booking_status_breakdown': {
+                'pending': pending_count,
+                'confirmed': confirmed_count,
+                'cancelled': cancelled_count,
+                'completed': completed_count,
+                'total': bookings.count()
+            },
+            'comparisons': {
+                'total_bookings': bookings.count(),
+                'confirmed_bookings': confirmed_bookings.count(),
+                'cancellation_rate': round((cancelled_count / bookings.count() * 100), 1) if bookings.count() > 0 else 0
+            }
+        }, status=status.HTTP_200_OK)
+
+
+# ============================================
+# PARTNER DASHBOARD VIEW (INDEPENDENT ANALYTICS)
+# ============================================
+
+class PartnerDashboardView(APIView):
+    """
+    Independent API for partner analytics dashboard page
+    Returns simplified, frontend-optimized analytics data
+    """
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name='period',
+                description='Analytics period: this_month, last_month, last_7_days, last_30_days',
+                required=False,
+                type=str,
+                enum=['this_month', 'last_month', 'last_7_days', 'last_30_days']
+            ),
+        ],
+        tags=['Dashboard'],
+        description="Get dashboard analytics data optimized for frontend display"
+    )
+    def get(self, request):
+        user = request.user
+        
+        # Check if user is a partner
+        if not hasattr(user, 'partner_profile'):
+            return Response({
+                'error': 'Only hotel partners can access dashboard'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Get partner's hotel
+        try:
+            hotel = Hotel.objects.get(partner=user)
+        except Hotel.DoesNotExist:
+            return Response({
+                'error': 'No hotel found for this partner'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Get period parameter (default: this_month)
+        period = request.query_params.get('period', 'this_month')
+        
+        # Calculate date range
+        now = timezone.now()
+        today = now.date()
+        
+        if period == 'last_month':
+            start_date = (now - timedelta(days=30)).date()
+            end_date = today
+            period_label = 'Last month'
+        elif period == 'last_7_days':
+            start_date = (now - timedelta(days=7)).date()
+            end_date = today
+            period_label = 'Last 7 days'
+        elif period == 'last_30_days':
+            start_date = (now - timedelta(days=30)).date()
+            end_date = today
+            period_label = 'Last 30 days'
+        else:  # this_month (default)
+            start_date = today.replace(day=1)
+            end_date = today
+            period_label = 'This month'
+        
+        # Get all bookings for this hotel in period
+        bookings = Booking.objects.filter(
+            hotel=hotel,
+            created_at__date__gte=start_date,
+            created_at__date__lte=end_date
+        )
+        
+        confirmed_bookings = bookings.filter(status__in=['confirmed', 'completed'])
+        
+        # Calculate metrics
+        total_days = (end_date - start_date).days + 1
+        days_with_bookings = bookings.filter(status__in=['confirmed', 'completed']).values('created_at__date').distinct().count()
+        booking_rate = (days_with_bookings / total_days * 100) if total_days > 0 else 0
+        
+        total_guests = sum(booking.number_of_guests for booking in confirmed_bookings)
+        
+        avg_rating = float(hotel.average_rating) if hotel.average_rating else 0.0
+        
+        # Calculate weekly traffic
+        weekly_traffic = {}
+        day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+        day_short_names = ['Mon', 'Tues', 'Wed', 'Thurs', 'Fri', 'Sat', 'Sun']
+        
+        for short_name in day_short_names:
+            weekly_traffic[short_name] = 0
+        
+        for booking in confirmed_bookings:
+            current_date = booking.check_in_date
+            while current_date < booking.check_out_date:
+                day_index = current_date.weekday()
+                # Convert Python weekday (0=Mon) to dashboard format
+                if day_index == 5:  # Saturday
+                    short_name = 'Sat'
+                elif day_index == 6:  # Sunday
+                    short_name = 'Sun'
+                else:
+                    short_name = day_short_names[day_index]
+                
+                if short_name in weekly_traffic:
+                    weekly_traffic[short_name] += 1
+                
+                current_date += timedelta(days=1)
+        
+        # Calculate revenue
+        total_revenue = sum(float(booking.final_price) for booking in confirmed_bookings)
+        
+        # Calculate occupancy
+        total_room_nights = hotel.number_of_rooms * total_days
+        booked_room_nights = sum(booking.number_of_nights for booking in confirmed_bookings)
+        occupancy_rate = (booked_room_nights / total_room_nights * 100) if total_room_nights > 0 else 0
+        
+        # Booking status breakdown
+        pending_count = bookings.filter(status='pending').count()
+        confirmed_count = bookings.filter(status='confirmed').count()
+        cancelled_count = bookings.filter(status='cancelled').count()
+        completed_count = bookings.filter(status='completed').count()
+        
+        return Response({
+            'hotel': {
+                'id': hotel.id,
+                'name': hotel.hotel_name,
+                'location': hotel.location,
+                'rating': round(avg_rating, 1)
+            },
+            'period': period_label,
+            'data': {
+                'booking_rate': round(booking_rate, 1),
+                'total_guests': total_guests,
+                'avg_rating': round(avg_rating, 1),
+                'occupancy_rate': round(occupancy_rate, 1),
+                'total_revenue': round(total_revenue, 2),
+                'average_booking_value': round(total_revenue / confirmed_bookings.count(), 2) if confirmed_bookings.count() > 0 else 0
+            },
+            'weekly_traffic': weekly_traffic,
+            'booking_summary': {
+                'pending': pending_count,
+                'confirmed': confirmed_count,
+                'cancelled': cancelled_count,
+                'completed': completed_count,
+                'total': bookings.count()
+            }
+        }, status=status.HTTP_200_OK)
+
+
+# ============================================
+# HOTEL DETAIL AND SPECIAL OFFERS VIEWS
+# ============================================
+
+class HotelDetailView(APIView):
+    """
+    GET: Retrieve detailed hotel information with special offers
+    """
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        responses={200: HotelDetailSerializer},
+        tags=['Hotel'],
+        description="Get detailed hotel information including active special offers"
+    )
+    def get(self, request, pk):
+        """
+        Get hotel details with active special offers
+        Only approved hotels are visible to non-partners
+        """
+        try:
+            hotel = Hotel.objects.get(pk=pk)
+            
+            # Check if user is the hotel owner or if hotel is approved
+            user = request.user
+            is_owner = hasattr(user, 'partner_profile') and hotel.partner == user
+            
+            if not is_owner and hotel.is_approved != 'approved':
+                return Response({
+                    'error': 'Hotel not found or not available'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            serializer = HotelDetailSerializer(hotel)
+            return Response({
+                'message': 'Hotel details retrieved successfully',
+                'hotel': serializer.data
+            }, status=status.HTTP_200_OK)
+            
+        except Hotel.DoesNotExist:
+            return Response({
+                'error': 'Hotel not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+
+        # Apply status filter
+        if status_filter:
+            bookings = bookings.filter(status=status_filter)
+        
+        total_count = bookings.count()
+        serializer = BookingListSerializer(bookings, many=True)
+        
+        return Response({
+            'message': f'{total_count} booking(s) found',
+            'total_count': total_count,
+            'results': serializer.data
+        }, status=status.HTTP_200_OK)
+
+
+# ============================================
+# AI SYSTEM VIEWS - BULK SYNC & RAG
+# ============================================
+
+class HotelBulkSyncView(APIView):
+    """
+    GET: Bulk sync endpoint for RAG system
+    Purpose: Provides all static hotel information used for embeddings.
+    Data: hotel_id, hotel_name, description, location_details, amenities, etc.
+    Note: Includes last_updated timestamp for incremental updates via cron job
+    """
+    permission_classes = [AllowAny]  # Allow AI system to access without auth
+    
+    @extend_schema(
+        responses={200: HotelBulkSyncSerializer(many=True)},
+        tags=['AI System'],
+        description="Bulk sync endpoint for RAG system - Returns all approved hotels with static data"
+    )
+    def get(self, request):
+        """
+        Get all approved hotels with static information for RAG embeddings.
+        Supports optional 'since' parameter for incremental syncs.
+        """
+        # Get all approved hotels
+        hotels = Hotel.objects.filter(is_approved='approved').order_by('id')
+        
+        # Optional: Filter by last_updated timestamp for incremental syncs
+        since = request.query_params.get('since')
+        if since:
+            try:
+                from django.utils import timezone
+                from datetime import datetime
+                since_datetime = datetime.fromisoformat(since)
+                hotels = hotels.filter(updated_at__gte=since_datetime)
+            except (ValueError, TypeError):
+                pass  # Ignore invalid timestamp format
+        
+        serializer = HotelBulkSyncSerializer(hotels, many=True)
+        hotels_data = serializer.data
+        
+        # Convert image paths to full URLs
+        base_url = request.build_absolute_uri('/').rstrip('/')
+        for hotel in hotels_data:
+            if 'images' in hotel and hotel['images']:
+                hotel['images'] = [f"{base_url}{img}" if not img.startswith('http') else img for img in hotel['images']]
+        
+        return Response({
+            'message': f'Synced {hotels.count()} approved hotels',
+            'count': hotels.count(),
+            'hotels': hotels_data
+        }, status=status.HTTP_200_OK)
+
+
+class HotelRealTimeDetailView(APIView):
+    """
+    GET: Real-time detail endpoint for AI verification
+    Purpose: Returns volatile data (prices, availability, offers) for on-the-fly verification.
+    Data: base_price_per_night, active_special_offers, commission_tier, current_availability
+    Note: Must be high-performance as AI calls this during chat to verify current state
+    """
+    permission_classes = [AllowAny]  # Allow AI system to access without auth
+    
+    @extend_schema(
+        responses={200: HotelRealTimeDetailSerializer},
+        tags=['AI System'],
+        description="Real-time detail endpoint for AI verification - Returns current prices and offers"
+    )
+    def get(self, request, hotel_id):
+        """
+        Get real-time hotel details for AI verification.
+        Only returns approved hotels to prevent outdated information from being served.
+        """
+        try:
+            hotel = Hotel.objects.get(id=hotel_id, is_approved='approved')
+            serializer = HotelRealTimeDetailSerializer(hotel)
+            
+            return Response({
+                'message': 'Hotel details retrieved successfully',
+                'hotel': serializer.data
+            }, status=status.HTTP_200_OK)
+            
+        except Hotel.DoesNotExist:
+            return Response({
+                'error': 'Hotel not found or not approved',
+                'hotel_id': hotel_id
+            }, status=status.HTTP_404_NOT_FOUND)
+
+
+# ============================================
+# IMAGE UPLOAD VIEW
+# ============================================
+
+class HotelImageUploadView(APIView):
+    """
+    Upload hotel images
+    POST: Upload a single image file
+    """
+    permission_classes = [IsAuthenticated]
+    parser_classes = (MultiPartParser, FormParser)
+    
+    @extend_schema(
+        request=None,
+        responses={200: {'description': 'Image uploaded successfully'}},
+        tags=['Hotel'],
+        description="Upload an image file for hotel - Returns image URL to add to images array"
+    )
+    def post(self, request):
+        user = request.user
+        
         # Check if user is a partner
         if not hasattr(user, 'partner_profile'):
             return Response({
@@ -850,5 +1370,4 @@ class BookingDetailView(APIView):
             'image_url': image_url,
             'hotel_id': hotel.id,
             'hotel_images': hotel.images
->>>>>>> 25b4413610ab56532672901829a009d3cea036ca
         }, status=status.HTTP_200_OK)
