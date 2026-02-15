@@ -5,9 +5,27 @@ from hotel.models import Hotel
 
 class HotelBasicSerializer(serializers.ModelSerializer):
     """Basic Hotel serializer for displaying in favorite list"""
+    images = serializers.SerializerMethodField()
+    
     class Meta:
         model = Hotel
         fields = ['id', 'hotel_name', 'location', 'city', 'country', 'base_price_per_night', 'images', 'amenities']
+    
+    def get_images(self, obj):
+        """Return full URLs for images"""
+        request = self.context.get('request')
+        if not obj.images:
+            return []
+        
+        images_with_full_url = []
+        for image_path in obj.images:
+            if request:
+                full_url = request.build_absolute_uri(image_path)
+            else:
+                full_url = image_path
+            images_with_full_url.append(full_url)
+        
+        return images_with_full_url
 
 
 class FavoriteHotelSerializer(serializers.ModelSerializer):

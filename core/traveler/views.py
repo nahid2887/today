@@ -22,6 +22,12 @@ class FavoriteHotelViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Get favorite hotels for the current traveler"""
         return FavoriteHotel.objects.filter(traveler=self.request.user)
+    
+    def get_serializer_context(self):
+        """Add request to serializer context"""
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
 
     def create(self, request, *args, **kwargs):
         """Add a hotel to favorites"""
