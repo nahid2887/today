@@ -38,28 +38,42 @@ AIHotel/
 
 ### Prerequisites
 
-- Python 3.10+
+- Python 3.10+ (< 3.14 for ChromaDB compatibility)
 - Groq API Key (get from https://console.groq.com)
 
 ### Setup
 
 1. **Clone or navigate to the project**:
 ```bash
-cd /home/robin/Downloads/AIHotel
+cd /home/robin/Documents/today/AIHotel
 ```
 
-2. **Create virtual environment**:
-```bash
-python -m venv .venv
-source .venv/bin/activate  # On Linux/Mac
-```
+2. **Install dependencies** (choose one method):
 
-3. **Install dependencies**:
-```bash
-pip install -e .
-```
+   **Option A: Using pip (traditional)**
+   ```bash
+   # Create virtual environment
+   python -m venv .venv
+   source .venv/bin/activate  # On Linux/Mac
+   # .venv\Scripts\activate   # On Windows
+   
+   # Install from pyproject.toml
+   pip install -e .
+   
+   # Or install from requirements.txt
+   pip install -r requirements.txt
+   ```
 
-4. **Create `.env` file**:
+   **Option B: Using uv (modern, faster)**
+   ```bash
+   # uv automatically manages virtual environments
+   uv sync
+   
+   # Run commands with uv
+   uv run python main.py
+   ```
+
+3. **Create `.env` file**:
 ```bash
 cat > .env << EOL
 GROQ_API_KEY=your_groq_api_key_here
@@ -113,7 +127,11 @@ async def recommend(query: str):
 ### Interactive CLI Mode
 
 ```bash
+# If using pip/venv:
 python main.py
+
+# If using uv:
+uv run python main.py
 ```
 
 This starts an interactive session where you can:
