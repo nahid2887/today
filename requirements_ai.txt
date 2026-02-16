@@ -1,0 +1,40 @@
+# Hotel Recommendation Agent - Requirements
+# Python >= 3.10, < 3.14 required (ChromaDB incompatible with 3.14+)
+
+# Core LangChain Dependencies
+langchain>=0.1.0
+langchain-core>=0.1.0
+langchain-community>=0.0.20
+langchain-openai>=0.0.5
+langchain-groq>=0.0.1
+langchain-chroma>=0.1.0
+langchain-huggingface>=0.0.1
+langgraph>=0.0.20
+
+# Vector Store & Embeddings
+chromadb>=0.4.22
+sentence-transformers>=2.2.2
+
+# HTTP & Configuration
+httpx>=0.26.0
+python-dotenv>=1.0.0
+
+# Data Validation
+pydantic>=2.5.0
+pydantic-settings>=2.0.0
+
+# Database (PostgreSQL async support)
+asyncpg>=0.29.0
+aiosqlite>=0.22.1
+
+# Async Utilities
+nest-asyncio>=1.6.0
+
+# Development Dependencies (optional)
+# Uncomment if needed for development
+# pytest>=7.4.0
+# pytest-asyncio>=0.21.0
+# black>=23.0.0
+# ruff>=0.1.0
+# mypy>=1.0.0
+# streamlit>=1.30.0
