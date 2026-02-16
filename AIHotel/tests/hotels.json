@@ -1,0 +1,1251 @@
+[
+    {
+        "id": 1,
+        "partner_name": "user",
+        "hotel_name": "Little National Hotel Sydney",
+        "description": null,
+        "location": "Sydney New South Wales",
+        "city": "Sydney",
+        "country": "Australia",
+        "amenities": [
+            "rooftop bar and lounge"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "4.7",
+        "total_ratings": 1601,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 2,
+        "partner_name": "user",
+        "hotel_name": "Song Hotel Sydney",
+        "description": null,
+        "location": "Sydney New South Wales",
+        "city": "Sydney",
+        "country": "Australia",
+        "amenities": [
+            "breakfast included"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "4.6",
+        "total_ratings": 261,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 3,
+        "partner_name": "user",
+        "hotel_name": "The Star Grand Hotel",
+        "description": null,
+        "location": "Sydney New South Wales",
+        "city": "Sydney",
+        "country": "Australia",
+        "amenities": [],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "4.3",
+        "total_ratings": 2340,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 4,
+        "partner_name": "user",
+        "hotel_name": "QT Sydney",
+        "description": null,
+        "location": "Sydney New South Wales",
+        "city": "Sydney",
+        "country": "Australia",
+        "amenities": [],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "4.6",
+        "total_ratings": 4229,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 5,
+        "partner_name": "user",
+        "hotel_name": "Zagame's House",
+        "description": null,
+        "location": "Melbourne Victoria",
+        "city": "Melbourne",
+        "country": "Australia",
+        "amenities": [],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "4.9",
+        "total_ratings": 497,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 6,
+        "partner_name": "user",
+        "hotel_name": "Emporium Hotel South Bank",
+        "description": null,
+        "location": "Brisbane Brisbane Region Queensland",
+        "city": "Brisbane",
+        "country": "Australia",
+        "amenities": [
+            "rooftop infinity pool"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "4.8",
+        "total_ratings": 1408,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 7,
+        "partner_name": "user",
+        "hotel_name": "Royal On The Park Hotel & Suites",
+        "description": null,
+        "location": "Brisbane Brisbane Region Queensland",
+        "city": "Brisbane",
+        "country": "Australia",
+        "amenities": [
+            "pool",
+            "spa",
+            "gym"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "4.4",
+        "total_ratings": 3479,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 8,
+        "partner_name": "user",
+        "hotel_name": "Pensione Hotel Perth",
+        "description": null,
+        "location": "Perth Greater Perth Western Australia",
+        "city": "Perth",
+        "country": "Australia",
+        "amenities": [],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "4.3",
+        "total_ratings": 1991,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 9,
+        "partner_name": "user",
+        "hotel_name": "Point Hotel",
+        "description": null,
+        "location": "Brisbane Brisbane Region Queensland",
+        "city": "Brisbane",
+        "country": "Australia",
+        "amenities": [
+            "rooftop bar"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "4.5",
+        "total_ratings": 1848,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 10,
+        "partner_name": "user",
+        "hotel_name": "Dorsett Melbourne",
+        "description": null,
+        "location": "Melbourne Victoria",
+        "city": "Melbourne",
+        "country": "Australia",
+        "amenities": [
+            "indoor pool",
+            "sauna",
+            "steam room",
+            "gym"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "4.5",
+        "total_ratings": 402,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 11,
+        "partner_name": "user",
+        "hotel_name": "The Darling",
+        "description": null,
+        "location": "Sydney New South Wales",
+        "city": "Sydney",
+        "country": "Australia",
+        "amenities": [
+            "spa",
+            "pool"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "4.6",
+        "total_ratings": 2094,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 12,
+        "partner_name": "user",
+        "hotel_name": "Four Seasons Hotel Sydney",
+        "description": null,
+        "location": "Sydney New South Wales",
+        "city": "Sydney",
+        "country": "Australia",
+        "amenities": [
+            "breakfast included"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "4.4",
+        "total_ratings": 8998,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 13,
+        "partner_name": "user",
+        "hotel_name": "Grand Chancellor Hotel Hobart",
+        "description": null,
+        "location": "Hobart Greater Hobart Tasmania",
+        "city": "Hobart",
+        "country": "Australia",
+        "amenities": [],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "4.5",
+        "total_ratings": 7259,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 14,
+        "partner_name": "user",
+        "hotel_name": "Quest East Perth",
+        "description": null,
+        "location": "Perth Greater Perth Western Australia",
+        "city": "Perth",
+        "country": "Australia",
+        "amenities": [
+            "rooftop bar"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "4.5",
+        "total_ratings": 892,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 15,
+        "partner_name": "user",
+        "hotel_name": "Wildlife Retreat At Taronga",
+        "description": null,
+        "location": "Sydney New South Wales",
+        "city": "Sydney",
+        "country": "Australia",
+        "amenities": [
+            "breakfast included"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "4.7",
+        "total_ratings": 1267,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 16,
+        "partner_name": "user",
+        "hotel_name": "YHA Sydney Harbour",
+        "description": null,
+        "location": "Sydney New South Wales",
+        "city": "Sydney",
+        "country": "Australia",
+        "amenities": [],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "4.5",
+        "total_ratings": 1312,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 17,
+        "partner_name": "user",
+        "hotel_name": "Rydges Melbourne",
+        "description": null,
+        "location": "Melbourne Victoria",
+        "city": "Melbourne",
+        "country": "Australia",
+        "amenities": [
+            "rooftop pool"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "4.6",
+        "total_ratings": 503,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 18,
+        "partner_name": "user",
+        "hotel_name": "The Grace Sydney",
+        "description": null,
+        "location": "Sydney New South Wales",
+        "city": "Sydney",
+        "country": "Australia",
+        "amenities": [],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "4.4",
+        "total_ratings": 8896,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 19,
+        "partner_name": "user",
+        "hotel_name": "Avenue Hotel Canberra",
+        "description": null,
+        "location": "Canberra Australian Capital Territory",
+        "city": "Canberra",
+        "country": "Australia",
+        "amenities": [
+            "free parking"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "4.6",
+        "total_ratings": 3627,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 20,
+        "partner_name": "user",
+        "hotel_name": "RACV Royal Pines Resort Gold Coast",
+        "description": null,
+        "location": "Benowa Gold Coast Queensland",
+        "city": "Gold Coast",
+        "country": "Australia",
+        "amenities": [
+            "golf courses",
+            "spa",
+            "pool",
+            "sports facilities"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "4.5",
+        "total_ratings": 1992,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 21,
+        "partner_name": "user",
+        "hotel_name": "Quest Docklands",
+        "description": null,
+        "location": "Melbourne Victoria",
+        "city": "Melbourne",
+        "country": "Australia",
+        "amenities": [
+            "fullyequipped kitchens",
+            "large balconies"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "4.5",
+        "total_ratings": 1860,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 22,
+        "partner_name": "user",
+        "hotel_name": "Adina Apartment Hotel Brisbane",
+        "description": null,
+        "location": "Brisbane Brisbane Region Queensland",
+        "city": "Brisbane",
+        "country": "Australia",
+        "amenities": [
+            "breakfast included"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "4.6",
+        "total_ratings": 682,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 23,
+        "partner_name": "user",
+        "hotel_name": "Treasury On Collins Melbourne",
+        "description": null,
+        "location": "Melbourne Victoria",
+        "city": "Melbourne",
+        "country": "Australia",
+        "amenities": [
+            "kitchenette",
+            "washer/dryer"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "4.8",
+        "total_ratings": 2198,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 24,
+        "partner_name": "user",
+        "hotel_name": "Lanson Place Parliament Gardens, Melbourne",
+        "description": null,
+        "location": "Melbourne Victoria",
+        "city": "Melbourne",
+        "country": "Australia",
+        "amenities": [
+            "spa",
+            "gym",
+            "lap pool"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "4.8",
+        "total_ratings": 194,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 25,
+        "partner_name": "user",
+        "hotel_name": "Quest On Franklin",
+        "description": null,
+        "location": "Adelaide Greater Adelaide South Australia",
+        "city": "Adelaide",
+        "country": "Australia",
+        "amenities": [
+            "well-equipped kitchens",
+            "laundry facilities"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "4.6",
+        "total_ratings": 1521,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 26,
+        "partner_name": "user",
+        "hotel_name": "The StandardX, Melbourne",
+        "description": null,
+        "location": "Fitzroy Yarra Greater Melbourne Victoria",
+        "city": "Melbourne",
+        "country": "Australia",
+        "amenities": [
+            "rooftop bar"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "4.8",
+        "total_ratings": 201,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 27,
+        "partner_name": "user",
+        "hotel_name": "Quest Bella Vista",
+        "description": null,
+        "location": "Bella Vista The Hills Shire Greater Sydney New South Wales",
+        "city": "Sydney",
+        "country": "Australia",
+        "amenities": [
+            "onsite parking"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "4.4",
+        "total_ratings": 1073,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 28,
+        "partner_name": "user",
+        "hotel_name": "Ovolo Brisbane, Fortitude Valley",
+        "description": null,
+        "location": "Brisbane Brisbane Region Queensland",
+        "city": "Brisbane",
+        "country": "Australia",
+        "amenities": [
+            "rooftop pool",
+            "gym",
+            "spa baths",
+            "complimentary mini bar"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "4.7",
+        "total_ratings": 1744,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 29,
+        "partner_name": "user",
+        "hotel_name": "Loch Ard Motor Inn",
+        "description": null,
+        "location": "Port Campbell Victoria",
+        "city": "Port Campbell",
+        "country": "Australia",
+        "amenities": [],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "4.5",
+        "total_ratings": 683,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 30,
+        "partner_name": "user",
+        "hotel_name": "Quest Newquay",
+        "description": null,
+        "location": "Melbourne Victoria",
+        "city": "Melbourne",
+        "country": "Australia",
+        "amenities": [],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "4.6",
+        "total_ratings": 949,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 31,
+        "partner_name": "user",
+        "hotel_name": "Landmark Resort",
+        "description": null,
+        "location": "Mooloolaba, QLD, Australia",
+        "city": "Mooloolaba",
+        "country": "Australia",
+        "amenities": [
+            "Free Wi-Fi",
+            "Parking",
+            "Outdoor pool",
+            "Fitness center",
+            "Sauna",
+            "Hot tub",
+            "Children's pool",
+            "Rooftop terrace"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "8.5",
+        "total_ratings": 2548,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 32,
+        "partner_name": "user",
+        "hotel_name": "Mantra Mooloolaba Beach",
+        "description": null,
+        "location": "Mooloolaba, QLD, Australia",
+        "city": "Mooloolaba",
+        "country": "Australia",
+        "amenities": [
+            "Pool",
+            "Free Wi-Fi",
+            "Parking"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "8.3",
+        "total_ratings": 2829,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 33,
+        "partner_name": "user",
+        "hotel_name": "Mantra Lorne",
+        "description": null,
+        "location": "Lorne, VIC, Australia",
+        "city": "Lorne",
+        "country": "Australia",
+        "amenities": [
+            "Pool",
+            "Free Wi-Fi",
+            "Parking"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "7.9",
+        "total_ratings": 3207,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 34,
+        "partner_name": "user",
+        "hotel_name": "Hyatt Regency Sydney",
+        "description": null,
+        "location": "Sydney, NSW, Australia",
+        "city": "Sydney",
+        "country": "Australia",
+        "amenities": [
+            "Free Wi-Fi"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "8.3",
+        "total_ratings": 3902,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 35,
+        "partner_name": "user",
+        "hotel_name": "The Langham Melbourne",
+        "description": null,
+        "location": "Melbourne, VIC, Australia",
+        "city": "Melbourne",
+        "country": "Australia",
+        "amenities": [
+            "Pool",
+            "Free Wi-Fi"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "8.9",
+        "total_ratings": 3042,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 36,
+        "partner_name": "user",
+        "hotel_name": "Sydney Harbour Marriott Hotel at Circular Quay",
+        "description": null,
+        "location": "Sydney, NSW, Australia",
+        "city": "Sydney",
+        "country": "Australia",
+        "amenities": [
+            "Pool",
+            "Free Wi-Fi"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "8.6",
+        "total_ratings": 3141,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 37,
+        "partner_name": "user",
+        "hotel_name": "Crown Metropol Melbourne",
+        "description": null,
+        "location": "Melbourne, VIC, Australia",
+        "city": "Melbourne",
+        "country": "Australia",
+        "amenities": [
+            "Pool",
+            "Free Wi-Fi"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "8.3",
+        "total_ratings": 2834,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 38,
+        "partner_name": "user",
+        "hotel_name": "DoubleTree by Hilton Melbourne Flinders Street",
+        "description": null,
+        "location": "Melbourne, VIC, Australia",
+        "city": "Melbourne",
+        "country": "Australia",
+        "amenities": [
+            "Free Wi-Fi"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "8.6",
+        "total_ratings": 1977,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 39,
+        "partner_name": "user",
+        "hotel_name": "Hilton Surfers Paradise",
+        "description": null,
+        "location": "Surfers Paradise, QLD, Australia",
+        "city": "Surfers Paradise",
+        "country": "Australia",
+        "amenities": [
+            "Pool",
+            "Free Wi-Fi"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "8.3",
+        "total_ratings": 3344,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 40,
+        "partner_name": "user",
+        "hotel_name": "Wrest Point",
+        "description": null,
+        "location": "Hobart, TAS, Australia",
+        "city": "Hobart",
+        "country": "Australia",
+        "amenities": [
+            "Pool",
+            "Free Wi-Fi",
+            "Parking"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": "8.6",
+        "total_ratings": 3636,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 41,
+        "partner_name": "user",
+        "hotel_name": "Outrigger Burleigh",
+        "description": null,
+        "location": "Miami, QLD, Australia",
+        "city": "Miami",
+        "country": "Australia",
+        "amenities": [
+            "Free Wi-Fi",
+            "Parking"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": null,
+        "total_ratings": null,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 42,
+        "partner_name": "user",
+        "hotel_name": "The Ritz-Carlton, Perth",
+        "description": null,
+        "location": "Perth, WA, Australia",
+        "city": "Perth",
+        "country": "Australia",
+        "amenities": [
+            "Free Wi-Fi"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": null,
+        "total_ratings": null,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 43,
+        "partner_name": "user",
+        "hotel_name": "The Star Grand at The Star Gold Coast",
+        "description": null,
+        "location": "Broadbeach, QLD, Australia",
+        "city": "Broadbeach",
+        "country": "Australia",
+        "amenities": [
+            "Free Wi-Fi"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": null,
+        "total_ratings": null,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 44,
+        "partner_name": "user",
+        "hotel_name": "The Island Gold Coast",
+        "description": null,
+        "location": "Surfers Paradise, QLD, Australia",
+        "city": "Surfers Paradise",
+        "country": "Australia",
+        "amenities": [
+            "Free Wi-Fi"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": null,
+        "total_ratings": null,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 45,
+        "partner_name": "user",
+        "hotel_name": "Great Southern Hotel Perth",
+        "description": null,
+        "location": "Perth, WA, Australia",
+        "city": "Perth",
+        "country": "Australia",
+        "amenities": [
+            "Free Wi-Fi"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": null,
+        "total_ratings": null,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 46,
+        "partner_name": "user",
+        "hotel_name": "Fairmont Resort Blue Mountains - MGallery",
+        "description": null,
+        "location": "Leura, NSW, Australia",
+        "city": "Leura",
+        "country": "Australia",
+        "amenities": [
+            "Pool",
+            "Free Wi-Fi"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": null,
+        "total_ratings": null,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 47,
+        "partner_name": "user",
+        "hotel_name": "Sea World Resort",
+        "description": null,
+        "location": "Main Beach, QLD, Australia",
+        "city": "Main Beach",
+        "country": "Australia",
+        "amenities": [
+            "Free Wi-Fi"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": null,
+        "total_ratings": null,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 48,
+        "partner_name": "user",
+        "hotel_name": "NOAH'S on the beach",
+        "description": null,
+        "location": "Newcastle, NSW, Australia",
+        "city": "Newcastle",
+        "country": "Australia",
+        "amenities": [
+            "Free Wi-Fi",
+            "Parking"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": null,
+        "total_ratings": null,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 49,
+        "partner_name": "user",
+        "hotel_name": "Meriton Suites Southport",
+        "description": null,
+        "location": "Southport, QLD, Australia",
+        "city": "Southport",
+        "country": "Australia",
+        "amenities": [
+            "Pool",
+            "Free Wi-Fi"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": null,
+        "total_ratings": null,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 50,
+        "partner_name": "user",
+        "hotel_name": "Sofitel Sydney Darling Harbour",
+        "description": null,
+        "location": "Sydney, NSW, Australia",
+        "city": "Sydney",
+        "country": "Australia",
+        "amenities": [],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": null,
+        "total_ratings": null,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 51,
+        "partner_name": "user",
+        "hotel_name": "Crown Towers Perth",
+        "description": null,
+        "location": "Burswood, WA, Australia",
+        "city": "Burswood",
+        "country": "Australia",
+        "amenities": [
+            "Free Wi-Fi"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": null,
+        "total_ratings": null,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 52,
+        "partner_name": "user",
+        "hotel_name": "The Olsen Melbourne - Art Series",
+        "description": null,
+        "location": "Melbourne, VIC, Australia",
+        "city": "Melbourne",
+        "country": "Australia",
+        "amenities": [
+            "Free Wi-Fi"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": null,
+        "total_ratings": null,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 53,
+        "partner_name": "user",
+        "hotel_name": "Imperial Hotel Gold Coast - Islander Hotel Trading Pty Ltd",
+        "description": null,
+        "location": "Main Beach, QLD, Australia",
+        "city": "Main Beach",
+        "country": "Australia",
+        "amenities": [
+            "Free Wi-Fi"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": null,
+        "total_ratings": null,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 54,
+        "partner_name": "user",
+        "hotel_name": "Carrington Hotel",
+        "description": null,
+        "location": "Katoomba, NSW, Australia",
+        "city": "Katoomba",
+        "country": "Australia",
+        "amenities": [
+            "Free Wi-Fi",
+            "Parking"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": null,
+        "total_ratings": null,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 55,
+        "partner_name": "user",
+        "hotel_name": "DoubleTree by Hilton Perth Northbridge",
+        "description": null,
+        "location": "Perth, WA, Australia",
+        "city": "Perth",
+        "country": "Australia",
+        "amenities": [
+            "Free Wi-Fi"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": null,
+        "total_ratings": null,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 56,
+        "partner_name": "user",
+        "hotel_name": "City Square Motel",
+        "description": null,
+        "location": "Melbourne, VIC, Australia",
+        "city": "Melbourne",
+        "country": "Australia",
+        "amenities": [
+            "Free Wi-Fi",
+            "Airport shuttle"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": null,
+        "total_ratings": null,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 57,
+        "partner_name": "user",
+        "hotel_name": "Great Southern Hotel Melbourne",
+        "description": null,
+        "location": "Melbourne, VIC, Australia",
+        "city": "Melbourne",
+        "country": "Australia",
+        "amenities": [
+            "Free Wi-Fi"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": null,
+        "total_ratings": null,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 58,
+        "partner_name": "user",
+        "hotel_name": "Paradise Island Resort",
+        "description": null,
+        "location": "Surfers Paradise, QLD, Australia",
+        "city": "Surfers Paradise",
+        "country": "Australia",
+        "amenities": [
+            "Free Wi-Fi",
+            "Parking"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": null,
+        "total_ratings": null,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 59,
+        "partner_name": "user",
+        "hotel_name": "ibis budget Melbourne CBD",
+        "description": null,
+        "location": "Melbourne, VIC, Australia",
+        "city": "Melbourne",
+        "country": "Australia",
+        "amenities": [
+            "Free Wi-Fi"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": null,
+        "total_ratings": null,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 60,
+        "partner_name": "user",
+        "hotel_name": "Harrigan's Hunter Valley",
+        "description": null,
+        "location": "Pokolbin, NSW, Australia",
+        "city": "Pokolbin",
+        "country": "Australia",
+        "amenities": [
+            "Free Wi-Fi",
+            "Parking"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": null,
+        "total_ratings": null,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 61,
+        "partner_name": "user",
+        "hotel_name": "Space Hotel",
+        "description": null,
+        "location": "Melbourne, VIC, Australia",
+        "city": "Melbourne",
+        "country": "Australia",
+        "amenities": [
+            "Free Wi-Fi"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": null,
+        "total_ratings": null,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 62,
+        "partner_name": "user",
+        "hotel_name": "Cairns Colonial Club Resort",
+        "description": null,
+        "location": "Cairns, QLD, Australia",
+        "city": "Cairns",
+        "country": "Australia",
+        "amenities": [
+            "Free Wi-Fi",
+            "Parking"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": null,
+        "total_ratings": null,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 63,
+        "partner_name": "user",
+        "hotel_name": "Best Western Plus The Tudor-Box Hill",
+        "description": null,
+        "location": "Melbourne, VIC, Australia",
+        "city": "Melbourne",
+        "country": "Australia",
+        "amenities": [
+            "Pool",
+            "Free Wi-Fi",
+            "Parking"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": null,
+        "total_ratings": null,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 64,
+        "partner_name": "user",
+        "hotel_name": "Atlantis Hotel Melbourne",
+        "description": null,
+        "location": "Melbourne, VIC, Australia",
+        "city": "Melbourne",
+        "country": "Australia",
+        "amenities": [
+            "Pool",
+            "Free Wi-Fi"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": null,
+        "total_ratings": null,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 65,
+        "partner_name": "user",
+        "hotel_name": "Ibis Sydney Thornleigh",
+        "description": null,
+        "location": "Sydney, NSW, Australia",
+        "city": "Sydney",
+        "country": "Australia",
+        "amenities": [
+            "Free Wi-Fi"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": null,
+        "total_ratings": null,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 66,
+        "partner_name": "user",
+        "hotel_name": "Hotel Grand Chancellor Melbourne",
+        "description": null,
+        "location": "Melbourne, VIC, Australia",
+        "city": "Melbourne",
+        "country": "Australia",
+        "amenities": [
+            "Free Wi-Fi"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": null,
+        "total_ratings": null,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 67,
+        "partner_name": "user",
+        "hotel_name": "Broadbeach Savannah Resort",
+        "description": null,
+        "location": "Broadbeach, QLD, Australia",
+        "city": "Broadbeach",
+        "country": "Australia",
+        "amenities": [],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": null,
+        "total_ratings": null,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    },
+    {
+        "id": 68,
+        "partner_name": "user",
+        "hotel_name": "The Victoria Hotel",
+        "description": null,
+        "location": "Melbourne, VIC, Australia",
+        "city": "Melbourne",
+        "country": "Australia",
+        "amenities": [
+            "Pool",
+            "Free Wi-Fi"
+        ],
+        "images": [],
+        "room_type": "standard",
+        "number_of_rooms": 1,
+        "average_rating": null,
+        "total_ratings": null,
+        "last_updated": "2026-02-10T00:00:00.000000+00:00"
+    }
+]
