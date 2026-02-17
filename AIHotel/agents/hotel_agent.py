@@ -250,28 +250,55 @@ The user is searching for hotels. We have the following cities in our database: 
 
 Analyze the user's query and the conversation history to produce a standalone, corrected search query.
 
-Goals:
-1. Correct city name typos (e.g., "Parth" -> "Perth").
-2. Resolve EXPLICIT pronouns and references ONLY (e.g., "Do THEY have a pool?", "hotels THERE", "in THAT city" -> "hotels with a pool in [Previous City]").
-3. DO NOT carry over location context unless the query contains explicit pronouns (they/them/those/these) or location references (there/that place/that city).
-4. PRESERVE CONSTRAINTS: If the user previously specified a budget (e.g., "under $200") or criteria, and the latest query is a follow-up (e.g., "which are best rated?"), ensure the corrected query still includes those constraints (e.g., "Best rated hotels in Melbourne under $200").
-5. AVOID LISTING NAMES: Do NOT explicitly list hotel names in the search query unless the user mentions them. Keep the search broad but specific to filters.
+CRITICAL RULES:
+1. Correct city name typos (e.g., "Parth" -> "Perth", "cumilla" -> "Comilla").
+2. ONLY carry over location context if the query has EXPLICIT references:
+   - Pronouns: "they", "them", "those", "these"
+   - Location words: "there", "that city", "that place", "same place"
+   - Examples: "do THEY have pool?" -> carry over city
+   - Examples: "hotels with pool" -> DO NOT carry over city (no explicit reference)
+3. PRESERVE CONSTRAINTS from previous queries IF the new query is a refinement:
+   - If user said "under $200" and now says "which are best rated?", keep budget constraint
+   - If user said "hotels with pool" and now says "cheapest one", keep pool requirement
+4. OUTPUT ONLY THE SEARCH QUERY - no explanations, no reasoning, just the query.
+5. DO NOT list specific hotel names unless user mentions them.
 
 Examples:
-- "peaceful pool hotels" (after "perth luxury hotels") -> "Hotels with a pool" (NO location carryover - user didn't say "there" or "those")
-- "do any of them have a pool?" (after showing hotels) -> "Hotels with a pool in [Previous City]" (YES - "them" is explicit pronoun)
-- "show me hotels there with gym" (after "perth") -> "Hotels with gym in Perth" (YES - "there" is explicit reference)
+User Query: "peaceful pool hotels" (previous: "perth luxury hotels")
+Output: Hotels with a pool
+
+User Query: "do any of them have a pool?" (previous: showing Sydney hotels)
+Output: Hotels with a pool in Sydney
+
+User Query: "show me cheaper ones" (previous: "hotels in Melbourne under $300")
+Output: Hotels in Melbourne under $300
+
+User Query: "hotels more than 200 dollars" (previous: "hotels in Sydney")
+Output: Hotels over $200
 
 Conversation History:
 {history_context}
 
 User's Latest Query: "{query}"
 
-STANDALONE CORRECTED QUERY:"""
+OUTPUT (query only, no explanation):"""
                 
                 # We use a fast call here
                 correction_response = self.llm.invoke([HumanMessage(content=correction_prompt)])
-                corrected_query = correction_response.content.strip().strip('"').strip("'")
+                raw_response = correction_response.content.strip()
+                
+                # Extract query - LLM should return just the query now
+                # But check for old format markers just in case
+                if "STANDALONE CORRECTED QUERY:" in raw_response:
+                    corrected_query = raw_response.split("STANDALONE CORRECTED QUERY:")[-1].strip()
+                elif "OUTPUT:" in raw_response:
+                    corrected_query = raw_response.split("OUTPUT:")[-1].strip()
+                else:
+                    # Use entire response (should just be the query)
+                    corrected_query = raw_response
+                
+                # Clean up quotes and extra whitespace
+                corrected_query = corrected_query.strip('"').strip("'").strip()
                 
                 if corrected_query.lower() != query.lower():
                     logger.info(f"LLM resolved context: '{query}' -> '{corrected_query}'")

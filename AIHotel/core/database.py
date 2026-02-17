@@ -152,17 +152,19 @@ class HotelDatabase:
                 params.append(exclude_ids)
                 param_count += 1
 
-        # City filter (case-insensitive)
+        # City filter (case-insensitive) - checks both city and location fields
         if city:
-            query_parts.append(f"AND LOWER(city) = LOWER(${param_count})")
+            query_parts.append(f"AND (LOWER(city) = LOWER(${param_count}) OR LOWER(location) LIKE LOWER(${param_count + 1}))")
             params.append(city)
-            param_count += 1
+            params.append(f"%{city}%")
+            param_count += 2
 
         # Exclude city filter
         if exclude_city:
-            query_parts.append(f"AND LOWER(city) != LOWER(${param_count})")
+            query_parts.append(f"AND (LOWER(city) != LOWER(${param_count}) AND LOWER(location) NOT LIKE LOWER(${param_count + 1}))")
             params.append(exclude_city)
-            param_count += 1
+            params.append(f"%{exclude_city}%")
+            param_count += 2
         
         # Rating filters
         if min_rating is not None:
@@ -285,21 +287,35 @@ class HotelDatabase:
     async def get_cities(self) -> List[str]:
         """
         Get list of all cities with hotels.
+        Extracts cities from both city and location fields.
         
         Returns:
-            List of city names
+            List of unique city names
         """
         query = """
-            SELECT DISTINCT city 
-            FROM hotel_hotel 
-            WHERE city IS NOT NULL AND city != '' AND is_approved = 'approved'
-            ORDER BY city
+            WITH city_list AS (
+                -- Get cities from city field
+                SELECT DISTINCT TRIM(city) as city_name
+                FROM hotel_hotel 
+                WHERE city IS NOT NULL AND city != '' AND is_approved = 'approved'
+                
+                UNION
+                
+                -- Extract city names from location field
+                -- Split by comma and take first part (common format: "City, Country")
+                SELECT DISTINCT TRIM(SPLIT_PART(location, ',', 1)) as city_name
+                FROM hotel_hotel 
+                WHERE location IS NOT NULL AND location != '' AND is_approved = 'approved'
+            )
+            SELECT city_name FROM city_list 
+            WHERE city_name IS NOT NULL AND city_name != ''
+            ORDER BY city_name
         """
         
         try:
             async with self.get_connection() as conn:
                 rows = await conn.fetch(query)
-                cities = [row['city'] for row in rows]
+                cities = [row['city_name'] for row in rows]
                 logger.info(f"Found {len(cities)} cities in database")
                 return cities
                 

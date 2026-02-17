@@ -318,6 +318,29 @@ class IntegratedHotelSearch:
                 logger.info(f"Found {len(hotels)} results after relaxation: {relaxation_note}")
                 relaxed_applied = True
                 filters = relaxed_filters # Use relaxed filters for match reason
+            
+            # 4. FINAL FALLBACK: If still no results and we have a city + price filter, 
+            # try searching globally (all cities) with the price constraint
+            if not hotels and original_city and (original_min_price or original_max_price):
+                logger.info(f"Still no results in {original_city}. Trying global search with price filter.")
+                hotels = await self.db.get_all_hotels(
+                    min_price=filters.get('min_price'),
+                    max_price=filters.get('max_price'),
+                    min_rating=filters.get('min_rating'),
+                    amenities=filters.get('amenities'),
+                    exclude_ids=exclude_ids,
+                    limit=limit
+                )
+                if hotels:
+                    price_desc = ""
+                    if original_min_price:
+                        price_desc = f"over ${original_min_price}"
+                    elif original_max_price:
+                        price_desc = f"under ${original_max_price}"
+                    relaxation_note += f" (Note: No hotels found in {original_city} {price_desc}. Showing results from other cities)"
+                    relaxed_applied = True
+                    # Remove city from filters so the match reason is accurate
+                    filters.pop('city', None)
                 filters['_relaxation_note'] = relaxation_note
         
         # Apply exclusion filters in memory (Priority 2)
