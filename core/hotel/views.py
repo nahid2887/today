@@ -415,7 +415,7 @@ class BookingCreateView(APIView):
             
             return Response({
                 'message': 'Booking created successfully',
-                'booking': BookingDetailSerializer(booking).data
+                'booking': BookingDetailSerializer(booking, context={'request': request}).data
             }, status=status.HTTP_201_CREATED)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -463,7 +463,7 @@ class BookingListView(APIView):
             bookings = bookings.filter(status=status_filter)
         
         total_count = bookings.count()
-        serializer = BookingListSerializer(bookings, many=True)
+        serializer = BookingListSerializer(bookings, many=True, context={'request': request})
         
         return Response({
             'message': f'{total_count} booking(s) found',

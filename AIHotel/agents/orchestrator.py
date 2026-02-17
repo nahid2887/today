@@ -448,7 +448,7 @@ Provide helpful travel information and offer to help find hotels if needed."""
                 **state,
                 "response": result['natural_language_response'],
                 "hotels": result['recommended_hotels'],
-                "last_hotels": result['last_hotels'], # Store full results for next turn
+                "last_hotels": result.get('last_hotels', []),
                 "shown_hotel_ids": result['shown_hotel_ids'],
                 "metadata": result.get('metadata', {})
             }

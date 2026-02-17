@@ -1,6 +1,13 @@
 # Hotel Recommendation Agent - Requirements
 # Python >= 3.10, < 3.14 required (ChromaDB incompatible with 3.14+)
 
+# API Server Dependencies
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+email-validator>=2.1.0
+
 # Core LangChain Dependencies
 langchain>=0.1.0
 langchain-core>=0.1.0

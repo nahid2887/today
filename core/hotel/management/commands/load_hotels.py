@@ -39,7 +39,8 @@ class Command(BaseCommand):
                 "room_type": "standard",
                 "number_of_rooms": 1,
                 "average_rating": "4.7",
-                "total_ratings": 1601,
+                                
+                                                "total_ratings": 1601,
             },
             {
                 "id": 2,

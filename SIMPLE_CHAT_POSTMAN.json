@@ -1,0 +1,401 @@
+{
+	"info": {
+		"_postman_id": "simple-chat-api",
+		"name": "Simple AI Chat API (2 Endpoints)",
+		"description": "Simplified chat API: Each traveler has ONE chat session, only 2 endpoints needed",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{jwt_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000",
+			"type": "string"
+		},
+		{
+			"key": "jwt_token",
+			"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxODAyNzQ3OTgyLCJpYXQiOjE3NzEyMTE5ODIsImp0aSI6ImVjNzU5NTlmMDNiYjQ5ZTY4ZDYzNGM2ODU1YmZiMjNhIiwidXNlcl9pZCI6ODF9.YtU95FISMIrPWTR7v9VkX0WDDdY9wXCM2bIvv5tOM2U",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "1. Authentication",
+			"item": [
+				{
+					"name": "Get JWT Token",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"apitest\",\n    \"password\": \"testpass123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/login/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"login",
+								""
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "2. Load Previous Messages (10 at a time)",
+			"item": [
+				{
+					"name": "Get Messages - Page 1 (Latest 10)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/chat/messages/?page=1&limit=10",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"chat",
+								"messages",
+								""
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Messages - Page 2 (Previous 10)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/chat/messages/?page=2&limit=10",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"chat",
+								"messages",
+								""
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "2"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Messages - Custom Limit (5 messages)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/chat/messages/?page=1&limit=5",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"chat",
+								"messages",
+								""
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "5"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "3. Send New Message",
+			"item": [
+				{
+					"name": "Send Message - Hotel Request",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"content\": \"I need a luxury hotel in Paris with spa facilities\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/chat/send/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"chat",
+								"send",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Send Message - Budget Travel",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"content\": \"Find me budget hotels in Tokyo near train stations\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/chat/send/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"chat",
+								"send",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Send Message - Business Travel",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"content\": \"I need hotels in New York with conference rooms and fast WiFi\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/chat/send/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"chat",
+								"send",
+								""
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "4. Complete Test Flow",
+			"item": [
+				{
+					"name": "Step 1: Login",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"apitest\",\n    \"password\": \"testpass123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/login/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"login",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Step 2: Send First Message",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"content\": \"Hello! I'm looking for hotels in London\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/chat/send/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"chat",
+								"send",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Step 3: Send Second Message",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"content\": \"I prefer 4-star hotels with breakfast included\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/chat/send/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"chat",
+								"send",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Step 4: Load Chat History",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/chat/messages/?page=1&limit=10",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"chat",
+								"messages",
+								""
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}

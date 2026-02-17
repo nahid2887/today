@@ -11,25 +11,54 @@ services:
       - "5433:5432"
     # Allow remote connections
     command: postgres -c listen_addresses='*'
+    networks:
+      - hotel_network
 
   web:
     build:
       context: ./core
       dockerfile: Dockerfile
-    command: python manage.py runserver 0.0.0.0:8000
+    command: daphne -b 0.0.0.0 -p 8000 core.asgi:application
     volumes:
       - ./core:/app
+      - ./AIHotel:/app/AIHotel  # Mount AIHotel directory
     ports:
       - "8000:8000"
+      - "8002:8000"
     environment:
       DB_ENGINE: django.db.backends.postgresql
       DB_NAME: hotel_db
       DB_USER: hotel_user
       DB_PASSWORD: hotel_pass
-      DB_HOST: db
-      DB_PORT: "5432"
-    depends_on:
-      - db
+      DB_HOST: "10.10.13.27"
+      DB_PORT: "5433"
+    networks:
+      - hotel_network
+
+  ai_chat_api:
+    build:
+      context: ./AIHotel
+      dockerfile: Dockerfile
+    command: python api_server.py
+    volumes:
+      - ./AIHotel:/app
+      - ./AIHotel/secret_key.txt:/app/secret_key.txt:ro
+    ports:
+      - "8001:8001"
+    environment:
+      DB_HOST: "10.10.13.27"
+      DB_PORT: "5433"
+      DB_NAME: hotel_db
+      DB_USER: hotel_user
+      DB_PASSWORD: hotel_pass
+      GROQ_API_KEY: "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"
+    networks:
+      - hotel_network
+    restart: unless-stopped
 
 volumes:
   postgres_data:
+
+networks:
+  hotel_network:
+    driver: bridge

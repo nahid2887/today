@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import Hotel, Booking, SpecialOffer
 from django.contrib.auth.models import User
+from django.utils.text import slugify
 
 
 class FlexibleListField(serializers.ListField):
@@ -173,6 +174,34 @@ class HotelListSerializer(serializers.ModelSerializer):
             'room_type', 'base_price_per_night', 'images',
             'average_rating', 'total_ratings', 'is_approved'
         ]
+    
+    def to_representation(self, instance):
+        """Add base URL to image paths"""
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        
+        if data.get('images') and request:
+            base_url = request.build_absolute_uri('/')
+            images = data['images']
+            
+            # Ensure images is a list
+            if isinstance(images, str):
+                images = [images]
+            
+            # Add base URL to relative paths
+            full_images = []
+            for img in images:
+                if isinstance(img, str):
+                    if img.startswith('http'):
+                        full_images.append(img)
+                    else:
+                        full_images.append(base_url.rstrip('/') + img)
+                else:
+                    full_images.append(img)
+            
+            data['images'] = full_images
+        
+        return data
 
 
 class BookingCreateSerializer(serializers.ModelSerializer):
@@ -235,23 +264,40 @@ class BookingListSerializer(serializers.ModelSerializer):
     """Serializer for listing bookings with hotel details"""
     hotel_name = serializers.CharField(source='hotel.hotel_name', read_only=True)
     hotel_city = serializers.CharField(source='hotel.city', read_only=True)
+    hotel_images = serializers.SerializerMethodField()
     traveler_name = serializers.CharField(source='traveler.first_name', read_only=True)
     traveler_email = serializers.CharField(source='traveler.email', read_only=True)
     
     class Meta:
         model = Booking
         fields = [
-            'id', 'hotel', 'hotel_name', 'hotel_city', 'traveler_name', 'traveler_email',
+            'id', 'hotel', 'hotel_name', 'hotel_city', 'hotel_images', 'traveler_name', 'traveler_email',
             'check_in_date', 'check_out_date', 'number_of_guests',
             'number_of_nights', 'price_per_night', 'total_price',
             'final_price', 'status', 'created_at'
         ]
         read_only_fields = fields
+    
+    def get_hotel_images(self, obj):
+        """Return full URLs for hotel images"""
+        request = self.context.get('request')
+        if not obj.hotel.images:
+            return []
+        
+        images_with_full_url = []
+        for image_path in obj.hotel.images:
+            if request:
+                full_url = request.build_absolute_uri(image_path)
+            else:
+                full_url = image_path
+            images_with_full_url.append(full_url)
+        
+        return images_with_full_url
 
 
 class BookingDetailSerializer(serializers.ModelSerializer):
     """Detailed serializer for single booking with all information"""
-    hotel_details = HotelListSerializer(source='hotel', read_only=True)
+    hotel_details = serializers.SerializerMethodField()
     traveler_name = serializers.CharField(source='traveler.first_name', read_only=True)
     traveler_email = serializers.CharField(source='traveler.email', read_only=True)
     
@@ -266,6 +312,11 @@ class BookingDetailSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = fields
+    
+    def get_hotel_details(self, obj):
+        """Serialize hotel with request context for full image URLs"""
+        serializer = HotelListSerializer(obj.hotel, context=self.context)
+        return serializer.data
 
 
 class BookingUpdateSerializer(serializers.ModelSerializer):
@@ -305,6 +356,7 @@ class BookingUpdateSerializer(serializers.ModelSerializer):
 class SpecialOfferSerializer(serializers.ModelSerializer):
     """Serializer for creating and managing special offers"""
     hotel_name = serializers.CharField(source='hotel.hotel_name', read_only=True)
+    hotel = serializers.IntegerField(required=False, write_only=True, help_text="Hotel ID (auto-populated from partner account)")
     
     # Use FlexibleListField for special_perks to handle both JSON and form-data
     special_perks = FlexibleListField(

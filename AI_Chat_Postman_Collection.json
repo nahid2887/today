@@ -1,0 +1,260 @@
+{
+  "info": {
+    "name": "AI Hotel Chat API",
+    "description": "API collection for testing the AI chat system",
+    "version": "1.0.0"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{jwt_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000"
+    },
+    {
+      "key": "jwt_token",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxODAyNzQ3OTgyLCJpYXQiOjE3NzEyMTE5ODIsImp0aSI6ImVjNzU5NTlmMDNiYjQ5ZTY4ZDYzNGM2ODU1YmZiMjNhIiwidXNlcl9pZCI6ODF9.YtU95FISMIrPWTR7v9VkX0WDDdY9wXCM2bIvv5tOM2U"
+    },
+    {
+      "key": "session_id",
+      "value": "1"
+    },
+    {
+      "key": "message_id",
+      "value": "1"
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "1. Register User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"chatuser\",\n  \"email\": \"chatuser@example.com\",\n  \"password\": \"testpass123\",\n  \"user_type\": \"traveler\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/register/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "register", ""]
+            }
+          }
+        },
+        {
+          "name": "2. Login User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"chatuser\",\n  \"password\": \"testpass123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/login/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "login", ""]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.collectionVariables.set('jwt_token', jsonData.access);",
+                  "    console.log('JWT Token saved:', jsonData.access);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Chat Sessions",
+      "item": [
+        {
+          "name": "1. List Chat Sessions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/chat/sessions/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "chat", "sessions", ""]
+            }
+          }
+        },
+        {
+          "name": "2. Create New Chat Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Hotel Search Chat\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/chat/sessions/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "chat", "sessions", ""]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.collectionVariables.set('session_id', jsonData.id);",
+                  "    console.log('Session ID saved:', jsonData.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3. Get Chat Session Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/chat/sessions/{{session_id}}/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "chat", "sessions", "{{session_id}}", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Chat Messages",
+      "item": [
+        {
+          "name": "1. Send Message",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"I need a hotel in Sydney with a pool and spa\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/chat/sessions/{{session_id}}/send/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "chat", "sessions", "{{session_id}}", "send", ""]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.collectionVariables.set('message_id', jsonData.assistant_message_id);",
+                  "    console.log('Assistant Message ID saved:', jsonData.assistant_message_id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. Get Messages in Session",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/chat/sessions/{{session_id}}/messages/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "chat", "sessions", "{{session_id}}", "messages", ""]
+            }
+          }
+        },
+        {
+          "name": "3. Stream AI Response (Note: Use browser for SSE)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/event-stream"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/chat/sessions/{{session_id}}/messages/{{message_id}}/stream/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "chat", "sessions", "{{session_id}}", "messages", "{{message_id}}", "stream", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Hotel Tracking",
+      "item": [
+        {
+          "name": "Mark Hotel Clicked",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/chat/messages/{{message_id}}/hotels/34/clicked/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "chat", "messages", "{{message_id}}", "hotels", "34", "clicked", ""]
+            }
+          }
+        },
+        {
+          "name": "Mark Hotel Booked",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/chat/messages/{{message_id}}/hotels/34/booked/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "chat", "messages", "{{message_id}}", "hotels", "34", "booked", ""]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

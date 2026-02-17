@@ -19,6 +19,11 @@ from .views import (
     # Image Upload
     HotelImageUploadView
 )
+from .notification_views import (
+    NotificationListView,
+    NotificationDetailView,
+    NotificationMarkAllReadView
+)
 
 app_name = 'hotel'
 
@@ -44,6 +49,11 @@ urlpatterns = [
     # ========== PARTNER ANALYTICS ==========
     path('manager/analytics/', PartnerAnalyticsView.as_view(), name='partner_analytics'),  # GET - Hotel analytics & metrics
     path('manager/dashboard/', PartnerDashboardView.as_view(), name='partner_dashboard'),  # GET - Dashboard data (independent page)
+    
+    # ========== NOTIFICATIONS ==========
+    path('notifications/', NotificationListView.as_view(), name='notifications_list'),  # GET - List notifications
+    path('notifications/<int:notification_id>/', NotificationDetailView.as_view(), name='notification_detail'),  # GET/PATCH/DELETE
+    path('notifications/mark-all-read/', NotificationMarkAllReadView.as_view(), name='mark_all_read'),  # POST - Mark all as read
     
     # ========== AI SYSTEM ENDPOINTS ==========
     path('sync/', HotelBulkSyncView.as_view(), name='hotel_bulk_sync'),  # GET - Bulk sync for RAG

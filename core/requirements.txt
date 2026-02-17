@@ -8,3 +8,32 @@ asgiref==3.8.1
 daphne==4.0.0
 django-cors-headers==4.4.0
 psycopg[binary]==3.2.3
+
+# AI Chat Dependencies
+langchain>=0.1.0
+langchain-core>=0.1.0
+langchain-community>=0.0.20
+langchain-openai>=0.0.5
+langchain-groq>=0.0.1
+langchain-chroma>=0.1.0
+langchain-huggingface>=0.0.1
+langgraph>=0.0.20
+
+# AIHotel Integration Dependencies
+chromadb>=0.4.22
+sentence-transformers>=2.2.2
+httpx>=0.26.0
+python-dotenv>=1.0.0
+pydantic>=2.5.0
+pydantic-settings>=2.0.0
+asyncpg>=0.29.0
+aiosqlite>=0.22.1
+nest-asyncio>=1.6.0
+chromadb>=0.4.22
+sentence-transformers>=2.2.2
+httpx>=0.26.0
+python-dotenv>=1.0.0
+pydantic>=2.5.0
+pydantic-settings>=2.0.0
+asyncpg>=0.29.0
+aiosqlite>=0.22.1

@@ -13,6 +13,16 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from pathlib import Path
 import os
 
+try:
+    from dotenv import load_dotenv
+    
+    # Load AIHotel .env file
+    aihotel_env_path = Path(__file__).resolve().parent.parent.parent / "AIHotel" / ".env"
+    if aihotel_env_path.exists():
+        load_dotenv(aihotel_env_path)
+except ImportError:
+    print("Warning: python-dotenv not installed, skipping .env file loading")
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 

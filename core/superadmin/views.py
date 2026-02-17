@@ -3,7 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
-from hotel.models import Hotel
+from hotel.models import Hotel, Notification
 from .serializers import PendingHotelSerializer
 from drf_spectacular.utils import extend_schema
 from channels.layers import get_channel_layer
@@ -120,6 +120,16 @@ class HotelVerificationViewSet(viewsets.ReadOnlyModelViewSet):
         hotel.is_approved = 'approved'
         hotel.save()
         
+        # Create database notification
+        Notification.objects.create(
+            user=hotel.partner,
+            hotel=hotel,
+            notification_type='hotel_approved',
+            title='Hotel Approved',
+            message=f'Your hotel "{hotel.hotel_name}" has been approved!',
+            data={'hotel_id': hotel.id, 'hotel_name': hotel.hotel_name}
+        )
+        
         # Send WebSocket notification
         self.send_websocket_notification(
             user_id=hotel.partner.id,
@@ -174,6 +184,20 @@ class HotelVerificationViewSet(viewsets.ReadOnlyModelViewSet):
         hotel.is_approved = 'rejected'
         hotel.rejection_reason = reason
         hotel.save()
+        
+        # Create database notification
+        Notification.objects.create(
+            user=hotel.partner,
+            hotel=hotel,
+            notification_type='hotel_rejected',
+            title='Hotel Rejected',
+            message=f'Your hotel "{hotel.hotel_name}" has been rejected. Reason: {reason}',
+            data={
+                'hotel_id': hotel.id,
+                'hotel_name': hotel.hotel_name,
+                'reason': reason
+            }
+        )
         
         # Send WebSocket notification with rejection reason
         self.send_websocket_notification(
