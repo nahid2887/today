@@ -561,7 +561,7 @@ class PartnerProfileView(APIView):
             }, status=status.HTTP_404_NOT_FOUND)
         
         partner_profile = user.partner_profile
-        serializer = PartnerProfileSerializer(partner_profile)
+        serializer = PartnerProfileSerializer(partner_profile, context={'request': request})
         
         return Response({
             'message': 'Partner profile retrieved successfully',
@@ -587,14 +587,15 @@ class PartnerProfileView(APIView):
         serializer = PartnerProfileUpdateSerializer(
             partner_profile, 
             data=request.data, 
-            partial=True
+            partial=True,
+            context={'request': request}
         )
         
         if serializer.is_valid():
             serializer.save()
             
             # Return updated profile
-            updated_serializer = PartnerProfileSerializer(partner_profile)
+            updated_serializer = PartnerProfileSerializer(partner_profile, context={'request': request})
             
             return Response({
                 'message': 'Partner profile updated successfully',

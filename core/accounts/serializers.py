@@ -100,6 +100,19 @@ class PartnerProfileSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.profile_picture.url)
             return obj.profile_picture.url
         return None
+    
+    def to_representation(self, instance):
+        """Add base URL to profile_picture field"""
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        
+        if data.get('profile_picture') and request:
+            base_url = request.build_absolute_uri('/')
+            profile_pic = data['profile_picture']
+            if not profile_pic.startswith('http'):
+                data['profile_picture'] = f"{base_url.rstrip('/')}{profile_pic}"
+        
+        return data
 
 
 class PartnerProfileUpdateSerializer(serializers.ModelSerializer):
@@ -126,6 +139,19 @@ class PartnerProfileUpdateSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.profile_picture.url)
             return obj.profile_picture.url
         return None
+    
+    def to_representation(self, instance):
+        """Add base URL to profile_picture field"""
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        
+        if data.get('profile_picture') and request:
+            base_url = request.build_absolute_uri('/')
+            profile_pic = data['profile_picture']
+            if not profile_pic.startswith('http'):
+                data['profile_picture'] = f"{base_url.rstrip('/')}{profile_pic}"
+        
+        return data
 
 
 class PartnerRegistrationStep1Serializer(serializers.Serializer):

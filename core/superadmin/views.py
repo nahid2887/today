@@ -3,8 +3,10 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
-from hotel.models import Hotel, Notification
-from .serializers import PendingHotelSerializer
+from django.contrib.auth.models import User
+from django.db.models import Count, Q, Sum, Avg
+from hotel.models import Hotel, Booking, Notification
+from .serializers import PendingHotelSerializer, AdminProfileSerializer, AdminProfileUpdateSerializer
 from drf_spectacular.utils import extend_schema
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
@@ -313,3 +315,152 @@ class ApprovedHotelDetailView(APIView):
             return Response({
                 'error': 'Approved hotel not found'
             }, status=status.HTTP_404_NOT_FOUND)
+
+
+class AdminDashboardStatsView(APIView):
+    """
+    Admin dashboard statistics API endpoint
+    GET /api/superadmin/dashboard/stats/
+    """
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(description="Get admin dashboard statistics")
+    def get(self, request):
+        """Get dashboard statistics for admin"""
+        try:
+            # Total Users (excluding staff)
+            total_users = User.objects.filter(is_active=True, is_staff=False).count()
+            
+            # Total Hotels
+            total_hotels = Hotel.objects.count()
+            
+            # Total Bookings
+            total_bookings = Booking.objects.count()
+            
+            # Pending Verifications (pending hotels)
+            pending_verifications = Hotel.objects.filter(is_approved='pending').count()
+            
+            # Get all approved hotels for calculations
+            approved_hotels = Hotel.objects.filter(is_approved='approved')
+            
+            # Engagement Rate (hotels with ratings / total hotels) * 100
+            hotels_with_ratings = approved_hotels.filter(total_ratings__gt=0).count()
+            engagement_rate = round(
+                (hotels_with_ratings / total_hotels * 100) if total_hotels > 0 else 0,
+                1
+            )
+            
+            # Active Cities (distinct cities with approved hotels)
+            active_cities = approved_hotels.values('city').distinct().count()
+            
+            # Revenue by Commission Tier
+            commission_tiers = {
+                '0-3% Commission': approved_hotels.filter(commission_rate__lt=4).count(),
+                '4-6% Commission': approved_hotels.filter(commission_rate__gte=4, commission_rate__lt=7).count(),
+                '7-9% Commission': approved_hotels.filter(commission_rate__gte=7, commission_rate__lte=10).count(),
+            }
+            
+            # Additional stats
+            approved_hotels_count = approved_hotels.count()
+            rejected_hotels_count = Hotel.objects.filter(is_approved='rejected').count()
+            
+            # Average hotel rating
+            avg_hotel_rating = approved_hotels.aggregate(avg=Avg('average_rating'))['avg'] or 0.0
+            avg_hotel_rating = round(avg_hotel_rating, 2)
+            
+            # Total confirmed bookings
+            confirmed_bookings = Booking.objects.filter(status='confirmed').count()
+            
+            return Response({
+                'status': 'success',
+                'data': {
+                    'total_users': total_users,
+                    'total_hotels': total_hotels,
+                    'total_bookings': total_bookings,
+                    'pending_verifications': pending_verifications,
+                    'engagement_rate': engagement_rate,
+                    'active_cities': active_cities,
+                    'approved_hotels': approved_hotels_count,
+                    'rejected_hotels': rejected_hotels_count,
+                    'average_hotel_rating': avg_hotel_rating,
+                    'confirmed_bookings': confirmed_bookings,
+                    'commission_tiers': commission_tiers,
+                    'timestamp': datetime.now().isoformat()
+                }
+            }, status=status.HTTP_200_OK)
+        
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class AdminProfileView(APIView):
+    """
+    API endpoint for superadmin to manage their own profile
+    GET: Retrieve admin profile
+    PATCH: Update admin profile
+    """
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(description="Get superadmin profile information")
+    def get(self, request):
+        """Get superadmin profile"""
+        try:
+            # Get current logged-in user
+            user = request.user
+            
+            # Check if user is superuser/staff
+            if not user.is_staff or not user.is_superuser:
+                return Response({
+                    'message': 'Only superadmin can access this endpoint',
+                    'status': 'error'
+                }, status=status.HTTP_403_FORBIDDEN)
+            
+            serializer = AdminProfileSerializer(user)
+            return Response({
+                'message': 'Admin profile retrieved successfully',
+                'profile': serializer.data
+            }, status=status.HTTP_200_OK)
+        
+        except Exception as e:
+            return Response({
+                'message': str(e),
+                'status': 'error'
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    @extend_schema(description="Update superadmin profile")
+    def patch(self, request):
+        """Update superadmin profile"""
+        try:
+            # Get current logged-in user
+            user = request.user
+            
+            # Check if user is superuser/staff
+            if not user.is_staff or not user.is_superuser:
+                return Response({
+                    'message': 'Only superadmin can access this endpoint',
+                    'status': 'error'
+                }, status=status.HTTP_403_FORBIDDEN)
+            
+            serializer = AdminProfileUpdateSerializer(user, data=request.data, partial=True)
+            
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    'message': 'Admin profile updated successfully',
+                    'profile': AdminProfileSerializer(user).data
+                }, status=status.HTTP_200_OK)
+            
+            return Response({
+                'message': 'Validation error',
+                'errors': serializer.errors,
+                'status': 'error'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        except Exception as e:
+            return Response({
+                'message': str(e),
+                'status': 'error'
+            }, status=status.HTTP_400_BAD_REQUEST)

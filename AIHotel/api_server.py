@@ -101,6 +101,7 @@ class MessageListResponse(BaseModel):
     page: int
     limit: int
     total: int
+    total_pages: int
     has_more: bool
 
 
@@ -384,7 +385,7 @@ async def send_chat_message(
 
 @app.get("/api/chat/messages/", response_model=MessageListResponse)
 async def get_chat_messages(
-    page: int = Query(1, ge=1, description="Page number"),
+    page: str = Query("1", description="Page number or 'last' for last page"),
     limit: int = Query(10, ge=1, le=50, description="Messages per page"),
     current_user: dict = Depends(get_current_user),
 ):
@@ -394,25 +395,46 @@ async def get_chat_messages(
     **Authentication:** Bearer token from Django login required.
 
     Query params:
-    - **page**: Page number (default: 1)
+    - **page**: Page number (default: 1) or 'last' for last page
     - **limit**: Messages per page (default: 10, max: 50)
 
     Examples:
-    - `GET /api/chat/messages/?page=1&limit=10` → Latest 10 messages
+    - `GET /api/chat/messages/?page=1&limit=10` → Latest 10 messages (newest first)
     - `GET /api/chat/messages/?page=2&limit=10` → Previous 10 messages
+    - `GET /api/chat/messages/?page=last&limit=10` → Oldest 10 messages (first/last page)
     """
     user_id = current_user["user_id"]
-    offset = (page - 1) * limit
-
+    
     pool = await get_db_pool()
 
     async with pool.acquire() as conn:
-        # Get total count
+        # Get total count first
         total = await conn.fetchval(
             "SELECT COUNT(*) FROM ai_chat_messages WHERE user_id = $1",
             user_id,
         )
+    
+    # Calculate total pages
+    total_pages = (total + limit - 1) // limit if total > 0 else 1
+    
+    # Handle 'last' page
+    if page == "last":
+        page_num = total_pages
+    else:
+        try:
+            page_num = int(page)
+            if page_num < 1:
+                page_num = 1
+            elif page_num > total_pages:
+                page_num = total_pages
+        except ValueError:
+            page_num = 1
+    
+    offset = (page_num - 1) * limit
 
+    pool = await get_db_pool()
+
+    async with pool.acquire() as conn:
         # Get messages with pagination (newest first)
         rows = await conn.fetch("""
             SELECT id, user_message, ai_response, hotels, created_at
@@ -443,9 +465,10 @@ async def get_chat_messages(
 
     return MessageListResponse(
         messages=messages,
-        page=page,
+        page=page_num,
         limit=limit,
         total=total,
+        total_pages=total_pages,
         has_more=has_more,
     )
 

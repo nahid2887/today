@@ -10,6 +10,47 @@ class PartnerSerializer(serializers.ModelSerializer):
         fields = ['id', 'first_name', 'last_name', 'email']
 
 
+class AdminProfileSerializer(serializers.ModelSerializer):
+    """Serializer for admin/superadmin profile"""
+    full_name = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = User
+        fields = [
+            'id',
+            'username',
+            'email',
+            'first_name',
+            'last_name',
+            'full_name',
+            'is_staff',
+            'is_superuser',
+            'date_joined'
+        ]
+        read_only_fields = ['id', 'username', 'date_joined', 'is_staff', 'is_superuser']
+    
+    def get_full_name(self, obj):
+        """Get full name from first_name and last_name"""
+        if obj.first_name and obj.last_name:
+            return f"{obj.first_name} {obj.last_name}"
+        return obj.username
+
+
+class AdminProfileUpdateSerializer(serializers.ModelSerializer):
+    """Serializer for updating admin profile"""
+    class Meta:
+        model = User
+        fields = ['email', 'first_name', 'last_name']
+    
+    def update(self, instance, validated_data):
+        """Update user profile"""
+        instance.email = validated_data.get('email', instance.email)
+        instance.first_name = validated_data.get('first_name', instance.first_name)
+        instance.last_name = validated_data.get('last_name', instance.last_name)
+        instance.save()
+        return instance
+
+
 class PendingHotelSerializer(serializers.ModelSerializer):
     """Serializer for pending hotels in admin verification queue"""
     partner = PartnerSerializer(read_only=True)
