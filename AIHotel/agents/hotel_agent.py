@@ -4,7 +4,7 @@ Hotel Recommendation Agent using LangGraph State Machine.
 This module implements a multi-stage agentic workflow:
 1. Search: Hybrid city filter + semantic search
 2. Ranker: Score results using rating and similarity
-3. Hydrator: Fetch live details for top recommendations
+3. Response: Generate natural language response from DB data
 """
 import logging
 import re
@@ -18,7 +18,6 @@ from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from core.integrated_search import IntegratedHotelSearch
-from tools.hotel_tools import get_live_hotel_details_batch, enrich_hotel_with_live_data
 from config import (
     OPENAI_API_KEY,
     OPENAI_MODEL,
@@ -103,6 +102,13 @@ class HotelRecommendationAgent:
                     model_name=GROQ_MODEL,
                     temperature=0.3,
                     max_tokens=1024
+                )
+                # Cheap fast LLM used only for the short query-correction call
+                self.llm_fast = ChatGroq(
+                    groq_api_key=GROQ_API_KEY,
+                    model_name=GROQ_MODEL,
+                    temperature=0.0,
+                    max_tokens=50
                 )
                 self.llm_provider = "Groq"
                 logger.info(f"Using Groq model: {GROQ_MODEL}")
@@ -232,20 +238,24 @@ City:"""
             # This enables "Do any of them have a pool?" to work correctly.
 
         # SMART QUERY CORRECTION & CONTEXT RESOLUTION
-        try:
-            available_cities = await self.search_system.get_available_cities()
-            if available_cities:
-                cities_str = ", ".join(available_cities)
-                
-                # Format recent history for query resolution
-                history_context = ""
-                if state.get('history'):
-                    recent = state['history'][-4:]
-                    for msg in recent:
-                        role = "User" if msg['role'] == 'user' else "Assistant"
-                        history_context += f"{role}: {msg['content']}\n"
+        # Skip if orchestrator already resolved the query in its classify step
+        if state.get('skip_query_correction'):
+            logger.info("[SEARCH] Skipping query correction (orchestrator already resolved)")
+        else:
+            try:
+                available_cities = await self.search_system.get_available_cities()
+                if available_cities:
+                    cities_str = ", ".join(available_cities)
+                    
+                    # Format recent history for query resolution
+                    history_context = ""
+                    if state.get('history'):
+                        recent = state['history'][-4:]
+                        for msg in recent:
+                            role = "User" if msg['role'] == 'user' else "Assistant"
+                            history_context += f"{role}: {msg['content']}\n"
 
-                correction_prompt = f"""You are a helpful travel assistant. 
+                    correction_prompt = f"""You are a helpful travel assistant. 
 The user is searching for hotels. We have the following cities in our database: {cities_str}
 
 Analyze the user's query and the conversation history to produce a standalone, corrected search query.
@@ -282,29 +292,29 @@ Conversation History:
 User's Latest Query: "{query}"
 
 OUTPUT (query only, no explanation):"""
-                
-                # We use a fast call here
-                correction_response = self.llm.invoke([HumanMessage(content=correction_prompt)])
-                raw_response = correction_response.content.strip()
-                
-                # Extract query - LLM should return just the query now
-                # But check for old format markers just in case
-                if "STANDALONE CORRECTED QUERY:" in raw_response:
-                    corrected_query = raw_response.split("STANDALONE CORRECTED QUERY:")[-1].strip()
-                elif "OUTPUT:" in raw_response:
-                    corrected_query = raw_response.split("OUTPUT:")[-1].strip()
-                else:
-                    # Use entire response (should just be the query)
-                    corrected_query = raw_response
-                
-                # Clean up quotes and extra whitespace
-                corrected_query = corrected_query.strip('"').strip("'").strip()
-                
-                if corrected_query.lower() != query.lower():
-                    logger.info(f"LLM resolved context: '{query}' -> '{corrected_query}'")
-                    query = corrected_query
-        except Exception as e:
-            logger.warning(f"Query resolution skipped: {e}")
+                    
+                    # Use a cheap low-token LLM for this short correction call
+                    correction_response = self.llm_fast.invoke([HumanMessage(content=correction_prompt)])
+                    raw_response = correction_response.content.strip()
+                    
+                    # Extract query - LLM should return just the query now
+                    # But check for old format markers just in case
+                    if "STANDALONE CORRECTED QUERY:" in raw_response:
+                        corrected_query = raw_response.split("STANDALONE CORRECTED QUERY:")[-1].strip()
+                    elif "OUTPUT:" in raw_response:
+                        corrected_query = raw_response.split("OUTPUT:")[-1].strip()
+                    else:
+                        # Use entire response (should just be the query)
+                        corrected_query = raw_response
+                    
+                    # Clean up quotes and extra whitespace
+                    corrected_query = corrected_query.strip('"').strip("'").strip()
+                    
+                    if corrected_query.lower() != query.lower():
+                        logger.info(f"LLM resolved context: '{query}' -> '{corrected_query}'")
+                        query = corrected_query
+            except Exception as e:
+                logger.warning(f"Query resolution skipped: {e}")
 
         try:
             # Never exclude previously shown hotels - always show all matching results
@@ -439,16 +449,21 @@ OUTPUT (query only, no explanation):"""
             for hotel in search_results:
                 # Normalize average_rating - Database consistently uses a 10.0 scale
                 raw_rating = hotel.get('average_rating', 0.0)
-                # Forced 10.0 scale normalization for consistency with production data
-                normalized_rating = raw_rating / 10.0
+                # Treat rating=0 as "no data" — use neutral 5.0 so unrated hotels
+                # aren't buried below hotels with any real rating.
+                effective_rating = raw_rating if raw_rating > 0 else 5.0
+                normalized_rating = effective_rating / 10.0
                 
                 # Similarity score is already normalized (0-1)
                 similarity = hotel.get('similarity_score', 0.6) # Default if search system didn't provide
                 
                 # Calculate weighted score (0.6 rating + 0.4 similarity)
                 composite_score = (RATING_WEIGHT * normalized_rating) + (SIMILARITY_WEIGHT * similarity)
-                
+                # Store effective_rating so the response layer knows this was imputed
                 hotel_with_score = hotel.copy()
+                if raw_rating == 0.0:
+                    hotel_with_score['_rating_imputed'] = True
+                
                 hotel_with_score['composite_score'] = composite_score
                 scored_hotels.append(hotel_with_score)
             
@@ -492,67 +507,13 @@ OUTPUT (query only, no explanation):"""
         Returns:
             Updated state with hydrated_hotels
         """
-        logger.info("[HYDRATE NODE] Fetching live data for top hotels")
-        
-        try:
-            ranked_hotels = state.get('ranked_hotels', [])
-            
-            if not ranked_hotels:
-                return {
-                    **state,
-                    "hydrated_hotels": []
-                }
-            
-            # Extract hotel IDs - safely convert to int (IDs are strings in metadata)
-            hotel_ids = []
-            for hotel in ranked_hotels:
-                hotel_id = hotel.get('id')
-                if hotel_id:
-                    try:
-                        # Convert to int if string, keep as is if already int
-                        hotel_ids.append(int(hotel_id) if isinstance(hotel_id, str) else hotel_id)
-                    except (ValueError, TypeError) as e:
-                        logger.warning(f"Invalid hotel ID: {hotel_id}, error: {e}")
-            
-            if not hotel_ids:
-                logger.warning("No valid hotel IDs to hydrate")
-                return {
-                    **state,
-                    "hydrated_hotels": ranked_hotels
-                }
-            
-            # Fetch live data for all hotels concurrently
-            live_data_list = await get_live_hotel_details_batch(hotel_ids)
-            
-            # Create a mapping of hotel_id to live_data
-            live_data_map = {
-                str(data.get('id', data.get('hotel_id'))): data 
-                for data in live_data_list
-            }
-            
-            # Enrich each hotel with live data
-            hydrated = []
-            for hotel in ranked_hotels:
-                hotel_id = str(hotel.get('id'))
-                live_data = live_data_map.get(hotel_id, {})
-                
-                enriched_hotel = enrich_hotel_with_live_data(hotel, live_data)
-                hydrated.append(enriched_hotel)
-            
-            logger.info(f"Hydrated {len(hydrated)} hotels with live data")
-            
-            return {
-                **state,
-                "hydrated_hotels": hydrated
-            }
-            
-        except Exception as e:
-            logger.error(f"Hydrate node error: {e}")
-            return {
-                **state,
-                "hydrated_hotels": state.get('ranked_hotels', []),
-                "error": f"Hydration failed: {str(e)}"
-            }
+        logger.info("[HYDRATE NODE] Using DB data directly (live API disabled)")
+        ranked_hotels = state.get('ranked_hotels', [])
+        logger.info(f"Passing through {len(ranked_hotels)} hotels from DB")
+        return {
+            **state,
+            "hydrated_hotels": ranked_hotels
+        }
     
     def _generate_response_node(self, state: AgentState) -> Dict[str, Any]:
         """
@@ -676,13 +637,13 @@ Style Guidelines:
 - Use the Conversation History to maintain a natural flow (e.g., "Following up on that," or "As you mentioned...").
 - Start with an enthusiastic opening.
 - Mention the number of hotels found ({count} hotels).
-- BE ACCURATE AND CRITICAL: 
-  - If the "Contextual Facts" for a hotel say "Semantic match" or mention that results were "Broadened/Relaxed", it means the hotel might NOT have exactly what the user asked for.
-  - Inform the user honestly if something (like "ocean view" or "balcony") is NOT explicitly confirmed in the amenities or description.
-  - Do NOT say "matched your request" if the match is only semantic/broadened. Use "closest alternatives" or "potential matches" instead.
-- If the user asked for an amenity but it's not explicitly confirmed, you MUST clarify. {missing_info}
-- For ratings, always assume a 10-point scale (e.g., "8.5/10").
-- Keep it concise (2-3 sentences max).
+- Be positive and direct. Do NOT hedge, apologize, or add disclaimers unless the hotels
+  genuinely could not match (e.g., city not in database, explicit amenity missing).
+- "Semantic match" in the Contextual Facts is NORMAL — it just means vector search was used.
+  Do NOT tell the user results are "closest alternatives" or "potential matches" for a normal search.
+- ONLY mention missing amenities if {missing_info} is non-empty. Otherwise stay positive.
+- For ratings, always use a 10-point scale (e.g., "8.5/10").
+- Keep it concise (2-3 sentences max). No bullet lists.
 
 Conversation History:
 {history_context}
@@ -722,7 +683,7 @@ Found Hotels (Contextual Facts):
             return {
                 **state,
                 "response": response_text,
-                "hydrated_hotels": hydrated_hotels # Include enriched objects
+                "hydrated_hotels": hydrated_hotels  # Include enriched objects
             }
             
         except Exception as e:
@@ -731,29 +692,25 @@ Found Hotels (Contextual Facts):
                 **state,
                 "response": "I've found some great hotels that match your request! Take a look at the options below."
             }
-            
-        except Exception as e:
-            logger.error(f"Response generation error: {e}")
-            return {
-                **state,
-                "response": "I found some great hotels for you, but had trouble generating a detailed response. Please check the hotel details below."
-            }
     
     async def run(
         self, 
         query: str, 
         history: Optional[List[Dict[str, str]]] = None, 
         shown_hotel_ids: Optional[List[int]] = None,
-        last_hotels: Optional[List[Dict[str, Any]]] = None
+        last_hotels: Optional[List[Dict[str, Any]]] = None,
+        skip_query_correction: bool = False
     ) -> Dict[str, Any]:
         """
         Execute the full agent workflow.
         
         Args:
-            query: User's natural language query
+            query: User's natural language query (may already be corrected by orchestrator)
             history: Optional conversation history
             shown_hotel_ids: List of hotel IDs already shown in this session
             last_hotels: Full result set from previous search (for refinement)
+            skip_query_correction: If True, skip the LLM correction call inside the agent
+                (because the orchestrator already resolved the query in its classify step)
             
         Returns:
             Dictionary containing:
@@ -777,7 +734,8 @@ Found Hotels (Contextual Facts):
             "pagination_offset": 0,
             "filters_applied": {},
             "last_hotels": last_hotels or [],
-            "is_refinement": False
+            "is_refinement": False,
+            "skip_query_correction": skip_query_correction
         }
         
         try:
@@ -810,10 +768,17 @@ Found Hotels (Contextual Facts):
             existing_ids = initial_state.get('shown_hotel_ids', [])
             updated_shown_ids = list(set(existing_ids + new_hotel_ids))
             
+            # Strip internal-only keys before returning to the API consumer
+            _internal_keys = {'_rating_imputed'}
+            clean_hotels = [
+                {k: v for k, v in h.items() if k not in _internal_keys}
+                for h in final_state.get('hydrated_hotels', [])
+            ]
+
             # Format output
             result = {
                 "natural_language_response": final_state.get("response", ""),
-                "recommended_hotels": final_state.get("hydrated_hotels", []),
+                "recommended_hotels": clean_hotels,
                 "last_hotels": final_state.get("search_results", []), # Pass back for multi-turn memory
                 "shown_hotel_ids": updated_shown_ids,  # Return updated list for session
                 "metadata": {

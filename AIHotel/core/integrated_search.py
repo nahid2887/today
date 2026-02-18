@@ -98,6 +98,25 @@ class IntegratedHotelSearch:
                 logger.info(f"   - Cities found: {len(self._available_cities)}")
                 logger.info(f"   - Amenities found: {len(self._available_amenities)}")
                 logger.info(f"   - Price range: ${self._price_bounds['min']} - ${self._price_bounds['max']}")
+
+                # Pre-warm the embedding cache so first searches aren't slow
+                if self.use_vector_ranking and self.embedding_model:
+                    try:
+                        all_hotels = await self.db.get_all_hotels(limit=500)
+                        for hotel in all_hotels:
+                            cache_key = f"{hotel['id']}_{hotel.get('hotel_name', '')}"
+                            text = (
+                                f"{hotel.get('hotel_name', '')} "
+                                f"{hotel.get('city', '')} "
+                                f"{hotel.get('description', '')} "
+                                f"{' '.join(hotel.get('amenities') or [])}"
+                            )
+                            self._embedding_cache[cache_key] = self.embedding_model.encode(
+                                text, convert_to_numpy=True
+                            )
+                        logger.info(f"   - Embedding cache pre-warmed for {len(self._embedding_cache)} hotels")
+                    except Exception as cache_err:
+                        logger.warning(f"Embedding cache pre-warm failed (non-critical): {cache_err}")
             except Exception as e:
                 logger.error(f"Failed to fetch discovery metadata during connection: {e}")
                 self._available_cities = []
@@ -447,8 +466,10 @@ class IntegratedHotelSearch:
         
         city_found = False
         if not negated_city:  # Only look for positive city if no negation
+            import re
             for city in valid_cities:
-                if city in query_lower:
+                # Use word boundaries to avoid substring false positives (e.g. "as" matching "last")
+                if re.search(r'\b' + re.escape(city.lower()) + r'\b', query_lower):
                     logger.info(f"City found in query: '{city}'")
                     filters['city'] = city.title()
                     city_found = True
@@ -487,8 +508,8 @@ class IntegratedHotelSearch:
                                 return filters
                             else:
                                 logger.info(f"Unknown location term '{potential_city}' - allowing vector search to handle it.")
-                                # We don't set 'city' filter, which allow global search 
-                                # (or contextual search if we injected the city in the agent)
+                                # We don't set 'city' filter, which allow global search
+                                break  # Stop after first unknown location — avoid double-logging
         
         # PRIORITY 1 FIX: Extract price FIRST (before rating) to avoid conflicts
         # Price extraction with validation (handles both min and max price)
@@ -730,11 +751,15 @@ class IntegratedHotelSearch:
         return self._dict_to_result(hotel) if hotel else None
     
     async def get_available_cities(self) -> List[str]:
-        """Get list of all available cities."""
+        """Get list of all available cities (uses in-memory cache after first connect)."""
         if not self._connected:
             await self.connect()
-        
-        return await self.db.get_cities()
+        # Return cached list — populated during connect(), no DB hit needed
+        if self._available_cities:
+            return self._available_cities
+        # Fallback: fetch and cache if somehow empty
+        self._available_cities = await self.db.get_cities()
+        return self._available_cities
     
     async def get_statistics(self) -> Dict[str, Any]:
         """Get database statistics."""

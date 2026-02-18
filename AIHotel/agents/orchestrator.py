@@ -36,24 +36,15 @@ class QueryType(str, Enum):
 class OrchestratorState(TypedDict):
     """
     State for the orchestrator workflow.
-    
-    Attributes:
-        query: User's input query
-        history: Conversation history
-        shown_hotel_ids: Hotels already shown in session
-        query_type: Classified query type
-        response: Final response to user
-        hotels: Recommended hotels (if hotel search)
-        metadata: Additional metadata
-        error: Any error messages
     """
     query: str
     history: List[Dict[str, str]]
     shown_hotel_ids: List[int]
     query_type: str
+    corrected_query: str          # Resolved/corrected query from classify step
     response: str
     hotels: List[Dict[str, Any]]
-    last_hotels: List[Dict[str, Any]]  # Memory: Hotels from previous turn
+    last_hotels: List[Dict[str, Any]]
     metadata: Dict[str, Any]
     error: str
 
@@ -95,6 +86,13 @@ class TravelOrchestrator:
                     model_name=GROQ_MODEL,
                     temperature=0.3,
                     max_tokens=1024
+                )
+                # Cheap LLM for classify + query correction (returns 2 lines)
+                self.llm_classifier = ChatGroq(
+                    groq_api_key=GROQ_API_KEY,
+                    model_name=GROQ_MODEL,
+                    temperature=0.0,
+                    max_tokens=80
                 )
                 logger.info(f"Orchestrator using Groq model: {GROQ_MODEL}")
             else:
@@ -164,120 +162,118 @@ class TravelOrchestrator:
     
     async def _classify_query(self, state: OrchestratorState) -> Dict[str, Any]:
         """
-        Classify the user query into one of three types.
-        
-        Uses LLM to determine intent, with pattern matching fallback and city awareness.
+        Classify the user query AND resolve query context in one LLM call.
+
+        For hotel searches, also returns a corrected/resolved query so the
+        hotel agent can skip its own second LLM correction call.
         """
         query = state['query']
         query_lower = query.lower().strip()
-        
+
         logger.info(f"[CLASSIFY] Analyzing query: {query}")
-        
-        # Get available cities from search system to improve classification
-        available_cities = await self.search_system.get_available_cities()
-        cities_str = ", ".join(available_cities) if available_cities else "None"
-        
-        # Fallback pattern matching for common conversational queries
-        # This handles cases when LLM is unavailable (rate limits, etc.)
+
         import re
+        # Fast pattern-match FIRST — skip DB call + LLM entirely for greetings
         conversational_patterns = [
-            r'\bhello\b', r'\bhi\b', r'\bhey\b', r'\bgreetings\b', r'\bgood morning\b', 
+            r'\bhello\b', r'\bhi\b', r'\bhey\b', r'\bgreetings\b', r'\bgood morning\b',
             r'\bgood afternoon\b', r'\bgood evening\b', r'\bgood night\b', r'\bhowdy\b',
             r'\bthanks\b', r'\bthank you\b', r'\bcheers\b', r'\bthx\b',
             r'\bbye\b', r'\bgoodbye\b', r'\bhow are you\b', r'\bwhats up\b',
             r'\bok\b', r'\bokay\b', r'\bgot it\b'
         ]
-        
-        # Check if query matches conversational patterns using word boundaries
         if any(re.search(pattern, query_lower) for pattern in conversational_patterns):
-            logger.info(f"[CLASSIFY] Pattern matched: NORMAL_CHAT")
-            return {
-                **state,
-                "query_type": QueryType.NORMAL_CHAT.value
-            }
-        
+            logger.info("[CLASSIFY] Pattern matched: NORMAL_CHAT")
+            return {**state, "query_type": QueryType.NORMAL_CHAT.value}
+
+        # Get available cities (cached — no DB hit after first connect)
+        available_cities = await self.search_system.get_available_cities()
+        cities_str = ", ".join(available_cities) if available_cities else "None"
+
+        # Short query with a known city → definitely hotel search, skip LLM
+        if len(query_lower.split()) <= 3:
+            for city in available_cities:
+                if city.lower() in query_lower:
+                    logger.info(f"[CLASSIFY] City mention in short query: {city} → HOTEL_SEARCH")
+                    return {**state, "query_type": QueryType.HOTEL_SEARCH.value,
+                            "corrected_query": query}
+
+        # Format recent history
+        history_context = ""
+        if state.get('history'):
+            for msg in state['history'][-4:]:
+                role = "User" if msg['role'] == 'user' else "Assistant"
+                history_context += f"{role}: {msg['content']}\n"
+
         try:
-            # Check for city mention if it's a short query
-            if len(query_lower.split()) <= 3:
-                for city in available_cities:
-                    if city.lower() in query_lower:
-                        logger.info(f"[CLASSIFY] City mention detected in short query: {city}. Routing to HOTEL_SEARCH")
-                        return {
-                            **state,
-                            "query_type": QueryType.HOTEL_SEARCH.value
-                        }
+            # ONE combined prompt: classify + correct the query in a single call
+            combined_prompt = f"""You are a travel assistant classifier and query resolver.
 
-            classification_prompt = f"""You are a query classifier for a travel assistant.
-Available cities in our database: {cities_str}
+Cities in our database: {cities_str}
 
-Classify the following user query into ONE of these categories:
+Task 1 - CLASSIFY the user query as one of:
+  NORMAL_CHAT  - greetings, thanks, bye, casual talk
+  TRAVEL_INFO  - general travel questions, destinations, tips (NOT hotel search)
+  HOTEL_SEARCH - finding/recommending hotels, room search, accommodation
 
-1. NORMAL_CHAT - Greetings, goodbyes, thank you, how are you, casual conversation
-   Examples: "hello", "hi", "thanks", "goodbye", "how are you"
+Task 2 - If HOTEL_SEARCH, produce a CORRECTED QUERY following these rules:
+  - Fix city name typos ("cumilla" -> "Comilla", "sydny" -> "Sydney")
+  - If the user does NOT mention a city, CARRY OVER the last city from conversation
+    history. Users typically stay in the same city across a session.
+    Examples (last city was Melbourne):
+      "best rated hotels"       → QUERY: best rated hotels in Melbourne
+      "hotels with pool"        → QUERY: hotels with pool in Melbourne
+      "cheap ones under $100"   → QUERY: cheap hotels under $100 in Melbourne
+  - Only DROP the carried-over city if the user clearly mentions a DIFFERENT city
+    or asks something city-agnostic like "any country" / "worldwide".
+  - If there is NO city in history at all, output the query as-is with no city added.
+  - Preserve budget/amenity constraints if query is a follow-up refinement.
+  - Output ONLY the search query, no explanation.
 
-2. TRAVEL_INFO - General travel questions about destinations, tips, weather, activities
-   Examples: "what's good to do in Paris?", "best time to visit Italy", 
-             "tell me about Tokyo", "travel tips for Europe"
-
-3. HOTEL_SEARCH - Anything related to finding, searching, or recommending hotels
-   Examples: "find hotels in New York", "hotels with pool", "luxury hotels", 
-             "show me hotels", "suggest hotels", "hotels with rating above 4",
-             "suggest some more", "show more", "any other options"
-   IMPORTANT: If a user mentions one of the available cities (like {cities_str[:50]}...), they are likely looking for hotels in that city.
-   IMPORTANT: Follow-up requests like "suggest more", "show more", "any others" 
-   should be classified as HOTEL_SEARCH because they're asking for more hotel results.
+Conversation History:
+{history_context}
 
 User Query: "{query}"
 
-Context: If the user previously asked about hotels, follow-up queries like "suggest more" 
-or "show more" are HOTEL_SEARCH queries.
+Respond in EXACTLY this format (two lines):
+TYPE: <NORMAL_CHAT|TRAVEL_INFO|HOTEL_SEARCH>
+QUERY: <corrected search query, or NONE if not hotel search>"""
 
-Respond with ONLY ONE WORD: NORMAL_CHAT, TRAVEL_INFO, or HOTEL_SEARCH"""
+            response = self.llm_classifier.invoke([HumanMessage(content=combined_prompt)])
+            raw = response.content.strip()
 
-            response = self.llm.invoke([HumanMessage(content=classification_prompt)])
-            classification = response.content.strip().upper()
-            
-            # Map to enum
-            if "NORMAL_CHAT" in classification:
-                query_type = QueryType.NORMAL_CHAT
-            elif "TRAVEL_INFO" in classification:
-                query_type = QueryType.TRAVEL_INFO
-            elif "HOTEL_SEARCH" in classification:
-                query_type = QueryType.HOTEL_SEARCH
-            else:
-                # Default to hotel search if unclear
-                logger.warning(f"Unclear classification: {classification}, defaulting to HOTEL_SEARCH")
-                query_type = QueryType.HOTEL_SEARCH
-            
-            logger.info(f"[CLASSIFY] Query type: {query_type}")
-            
+            # Parse the two-line response
+            query_type = QueryType.HOTEL_SEARCH  # default
+            corrected_query = query
+            for line in raw.splitlines():
+                line = line.strip()
+                if line.startswith("TYPE:"):
+                    tipo = line.split("TYPE:", 1)[1].strip().upper()
+                    if "NORMAL_CHAT" in tipo:
+                        query_type = QueryType.NORMAL_CHAT
+                    elif "TRAVEL_INFO" in tipo:
+                        query_type = QueryType.TRAVEL_INFO
+                    else:
+                        query_type = QueryType.HOTEL_SEARCH
+                elif line.startswith("QUERY:"):
+                    q = line.split("QUERY:", 1)[1].strip().strip('"').strip("'")
+                    if q and q.upper() != "NONE":
+                        corrected_query = q
+
+            logger.info(f"[CLASSIFY] Query type: {query_type}, corrected: '{corrected_query}'")
             return {
                 **state,
-                "query_type": query_type.value
+                "query_type": query_type.value,
+                "corrected_query": corrected_query
             }
-            
+
         except Exception as e:
             logger.error(f"Classification error: {e}")
-            
-            # Use pattern matching fallback when LLM fails
-            # Check for conversational patterns first
-            conversational_patterns = [
-                'hello', 'hi', 'hey', 'thanks', 'thank you', 'bye', 'goodbye',
-                'good morning', 'good afternoon', 'good evening', 'how are you'
-            ]
-            if any(pattern in query_lower for pattern in conversational_patterns):
-                logger.info(f"[CLASSIFY] Fallback: NORMAL_CHAT detected")
-                return {
-                    **state,
-                    "query_type": QueryType.NORMAL_CHAT.value
-                }
-            
-            # Default to hotel search if no patterns match
-            logger.warning(f"[CLASSIFY] Fallback: defaulting to HOTEL_SEARCH")
-            return {
-                **state,
-                "query_type": QueryType.HOTEL_SEARCH.value
-            }
+            # Fallback
+            convos = ['hello', 'hi', 'hey', 'thanks', 'thank you', 'bye', 'goodbye',
+                      'good morning', 'good afternoon', 'good evening', 'how are you']
+            if any(p in query_lower for p in convos):
+                return {**state, "query_type": QueryType.NORMAL_CHAT.value}
+            return {**state, "query_type": QueryType.HOTEL_SEARCH.value}
     
     def _route_query(self, state: OrchestratorState) -> str:
         """
@@ -420,26 +416,25 @@ Provide helpful travel information and offer to help find hotels if needed."""
     async def _handle_hotel_search(self, state: OrchestratorState) -> Dict[str, Any]:
         """
         Handle hotel search queries using HotelRecommendationAgent.
-        
-        This is the main hotel search flow with:
-        - Hybrid search (SQL + Vector)
-        - Session state tracking
-        - Pagination support
+        Uses pre-resolved corrected_query from the classify step to avoid
+        a second LLM call inside the hotel agent.
         """
         logger.info("[HOTEL_SEARCH] Routing to HotelRecommendationAgent")
-        
-        query = state['query']
+
+        # Use the corrected query produced by classify if available
+        query = state.get('corrected_query') or state['query']
         history = state.get('history', [])
         shown_hotel_ids = state.get('shown_hotel_ids', [])
         last_hotels = state.get('last_hotels', [])
         
         try:
-            # Call the hotel agent
+            # Pass the already-corrected query; hotel agent will skip its own correction call
             result = await self.hotel_agent.run(
                 query=query,
                 history=history,
                 shown_hotel_ids=shown_hotel_ids,
-                last_hotels=last_hotels
+                last_hotels=last_hotels,
+                skip_query_correction=True  # classify already did this
             )
             
             logger.info(f"[HOTEL_SEARCH] Found {len(result['recommended_hotels'])} hotels")
@@ -515,8 +510,8 @@ Provide helpful travel information and offer to help find hotels if needed."""
             return {
                 "natural_language_response": final_state.get("response", ""),
                 "recommended_hotels": final_state.get("hotels", []),
-                "last_hotels": final_state.get("last_hotels", []), # Memory for next turn
-                "shown_hotel_ids": final_state.get("shown_hotel_ids", shown_hotel_ids or []),
+                "last_hotels": final_state.get("last_hotels", []),
+                "shown_hotel_ids": final_state.get("shown_hotel_ids") or shown_hotel_ids or [],
                 "metadata": {
                     **final_state.get("metadata", {}),
                     "query_type": query_type,
