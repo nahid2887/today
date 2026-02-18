@@ -219,10 +219,6 @@ async def main():
             print("=" * 60)
             print(result['natural_language_response'])
             
-            # Show helpful hint if all hotels were shown
-            if "already shown you all" in result['natural_language_response'].lower():
-                print("\n💡 Tip: Type 'reset' to clear session and see all hotels again")
-            
             # Display metadata
             metadata = result.get('metadata', {})
             if metadata.get('filters_applied'):
@@ -238,7 +234,7 @@ async def main():
                     print(f"\n📊 Filters Applied: {', '.join(filter_parts)}")
             
             if metadata.get('total_shown_in_session', 0) > 0:
-                print(f"💡 Session: Shown {metadata['total_shown_in_session']} unique hotels so far")
+                print(f"💡 Session: Hotels shown this session: {metadata['total_shown_in_session']}")
             
             # Display hotel details
             if result['recommended_hotels']:

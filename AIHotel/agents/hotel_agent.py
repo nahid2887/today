@@ -307,25 +307,13 @@ OUTPUT (query only, no explanation):"""
             logger.warning(f"Query resolution skipped: {e}")
 
         try:
-            # Get shown hotel IDs from state
-            shown_hotel_ids = list(state.get('shown_hotel_ids', []))
-            
-            # REFINEMENT CAUTION: If this is a refinement (e.g., "Which of those..."), 
-            # we should NOT exclude the previous hotels, because we WANT to find them again.
-            if is_refinement:
-                logger.info("Refinement detected: Clearing exclude_ids to allow showing previous results again")
-                exclude_ids_for_search = []
-            else:
-                exclude_ids_for_search = shown_hotel_ids
-
-            # Use IntegratedHotelSearch for database query
-            # We pass shown_hotel_ids to exclude them at the DB level
+            # Never exclude previously shown hotels - always show all matching results
             results, metadata = await self.search_system.search(
                 query=query,
                 limit=10,
-                use_nl_to_sql=False,  # Use simple filters for now
+                use_nl_to_sql=False,
                 include_metadata=True,
-                exclude_ids=exclude_ids_for_search
+                exclude_ids=[]
             )
             
             # Check for specific validation errors from the search system
@@ -360,48 +348,7 @@ OUTPUT (query only, no explanation):"""
                 hotel_dicts.append(hotel_dict)
             
             if not hotel_dicts:
-                # Check if this is because all hotels were already shown
-                # (only if we actually excluded some IDs)
-                if exclude_ids_for_search and len(exclude_ids_for_search) > 0:
-                    # Try search without exclusions to see if hotels exist at all
-                    try:
-                        check_results, check_metadata = await self.search_system.search(
-                            query=query,
-                            limit=100,  # Get all matching hotels
-                            use_nl_to_sql=False,
-                            include_metadata=True,
-                            exclude_ids=[] # No exclusions
-                        )
-                        
-                        if check_results:
-                            # Hotels exist but all were already shown
-                            city_name = metadata.get('filters', {}).get('city', 'this location')
-                            total_shown = len(state.get('shown_hotel_ids', []))
-                            total_matching = len(check_results)
-                            
-                            # Check if amenities were requested
-                            requested_amenities = metadata.get('filters', {}).get('amenities', [])
-                            amenity_context = ""
-                            if requested_amenities:
-                                amenity_names = ', '.join(requested_amenities)
-                                if total_matching < total_shown:
-                                    # Only some hotels have the amenity
-                                    amenity_context = f"with {amenity_names}|"
-                                else:
-                                    amenity_context = ""
-                            
-                            logger.warning(f"All available hotels in {city_name} have been shown ({total_shown} total, {total_matching} matching current query)")
-                            return {
-                                **state,
-                                "search_results": [],
-                                "filters_applied": metadata.get('filters', {}),
-                                "error": f"all_shown|{city_name}|{total_shown}|{total_matching}|{amenity_context}"
-                            }
-                    except Exception as e:
-                        logger.warning(f"Could not verify hotel availability: {e}")
-                
-                # No hotels found at all for this criteria
-                logger.warning("No hotels found matching criteria (not due to exclusions)")
+                logger.warning("No hotels found matching criteria")
                 return {
                     **state,
                     "search_results": [],
@@ -620,27 +567,6 @@ OUTPUT (query only, no explanation):"""
             
             # 1. Handle Errors for UI
             if error and not hydrated_hotels:
-                # Check if error is "all_shown" type
-                if error.startswith('all_shown|'):
-                    parts = error.split('|')
-                    city_name = parts[1] if len(parts) > 1 else 'this location'
-                    total_shown = parts[2] if len(parts) > 2 else 'all'
-                    total_matching = parts[3] if len(parts) > 3 else total_shown
-                    amenity_context = parts[4] if len(parts) > 4 else ""
-                    
-                    # Build contextual message
-                    if amenity_context:
-                        # User asked for specific amenity - explain the limited availability
-                        response = f"I found that only {total_matching} of the {total_shown} hotels in {city_name} have {amenity_context}, and I've already shown them to you. Would you like to see them again, or explore hotels in a different city?"
-                    else:
-                        # Generic all-shown message
-                        response = f"I've already shown you all {total_shown} available hotels in {city_name}! Would you like to see them again, or shall we explore a different city? I can also search with different criteria (like price range or amenities) if you'd like."
-                    
-                    return {
-                        **state,
-                        "response": response
-                    }
-                
                 return {
                     **state,
                     "response": f"I hit a small snag: {error.replace('Invalid input: ', '')}. Could you try adjusting your search terms?"
