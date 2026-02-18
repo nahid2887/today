@@ -8,6 +8,7 @@ from .views import (
     PartnerRegistrationStep2View,
     PartnerRegistrationView,
     PartnerProfileView,
+    TravelerProfileView,
     ForgotPasswordView,
     VerifyOTPView,
     ResetPasswordView,
@@ -42,6 +43,9 @@ urlpatterns = [
     
     # Partner Profile Management
     path('partner/profile/', PartnerProfileView.as_view(), name='partner_profile'),
+    
+    # Traveler Profile Management
+    path('traveler/profile/', TravelerProfileView.as_view(), name='traveler_profile'),
     
     # Traveler Information Endpoints
     path('traveler/terms/', TravelerTermsView.as_view(), name='traveler_terms'),

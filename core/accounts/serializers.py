@@ -30,9 +30,40 @@ class LoginSerializer(serializers.Serializer):
 
 
 class TravelerProfileSerializer(serializers.ModelSerializer):
+    """Serializer for traveler profile - GET requests"""
+    profile_picture_url = serializers.SerializerMethodField()
+    user_email = serializers.CharField(source='user.email', read_only=True)
+    user_first_name = serializers.CharField(source='user.first_name', read_only=True)
+    user_last_name = serializers.CharField(source='user.last_name', read_only=True)
+    
     class Meta:
         model = TravelerProfile
-        fields = ['profile_type', 'bio', 'profile_picture']
+        fields = ['profile_type', 'bio', 'profile_picture', 'profile_picture_url', 
+                  'user_email', 'user_first_name', 'user_last_name', 'created_at', 'updated_at']
+        read_only_fields = ['profile_type', 'created_at', 'updated_at']
+    
+    def get_profile_picture_url(self, obj):
+        """Get full URL for profile picture"""
+        if obj.profile_picture:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.profile_picture.url)
+        return None
+
+
+class TravelerProfileUpdateSerializer(serializers.ModelSerializer):
+    """Serializer for updating traveler profile - PATCH requests"""
+    class Meta:
+        model = TravelerProfile
+        fields = ['bio', 'profile_picture']
+    
+    def update(self, instance, validated_data):
+        """Update traveler profile"""
+        instance.bio = validated_data.get('bio', instance.bio)
+        if 'profile_picture' in validated_data:
+            instance.profile_picture = validated_data['profile_picture']
+        instance.save()
+        return instance
 
 
 class UserRegistrationSerializer(serializers.Serializer):

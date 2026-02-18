@@ -37,10 +37,12 @@ class PartnerNotificationConsumer(AsyncWebsocketConsumer):
         await self.accept()
         logger.info(f"Partner {self.user_id} connected")
         
-        # Send recent notifications on connect
-        notifications = await self.get_recent_notifications()
-        for notification in notifications:
-            await self.send(text_data=json.dumps(notification))
+        # Send connection confirmation
+        await self.send(text_data=json.dumps({
+            'type': 'connection_established',
+            'message': 'Connected to notification service',
+            'user_id': self.user_id
+        }))
     
     async def disconnect(self, close_code):
         """Handle WebSocket disconnection"""

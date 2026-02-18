@@ -27,7 +27,7 @@ nest_asyncio.apply()
 
 import asyncpg
 import uvicorn
-from fastapi import FastAPI, Depends, HTTPException, status, Query
+from fastapi import FastAPI, Depends, HTTPException, status, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import RedirectResponse
@@ -374,6 +374,15 @@ async def send_chat_message(
 
     logger.info(f"Chat message saved for user {user_id}, message_id: {row['id']}")
 
+    # Add base URL to hotel images
+    base_url = "http://localhost:8001"
+    for hotel in hotels:
+        if 'images' in hotel and hotel['images']:
+            hotel['images'] = [
+                f"{base_url}{img}" if img.startswith('/') else img 
+                for img in hotel['images']
+            ]
+
     return ChatResponse(
         id=row["id"],
         user_message=message.content,
@@ -385,6 +394,7 @@ async def send_chat_message(
 
 @app.get("/api/chat/messages/", response_model=MessageListResponse)
 async def get_chat_messages(
+    request: Request,
     page: str = Query("1", description="Page number or 'last' for last page"),
     limit: int = Query(10, ge=1, le=50, description="Messages per page"),
     current_user: dict = Depends(get_current_user),
@@ -445,6 +455,9 @@ async def get_chat_messages(
         """, user_id, limit, offset)
 
     messages = []
+    # Get base URL from request headers
+    base_url = str(request.base_url).rstrip('/')  # http://localhost:8001/
+    
     for row in rows:
         hotels_raw = row["hotels"]
         if isinstance(hotels_raw, str):
@@ -453,6 +466,15 @@ async def get_chat_messages(
             hotels = []
         else:
             hotels = hotels_raw
+        
+        # Add base URL to hotel images
+        for hotel in hotels:
+            if 'images' in hotel and hotel['images']:
+                hotel['images'] = [
+                    f"{base_url}{img}" if img.startswith('/') else img 
+                    for img in hotel['images']
+                ]
+        
         messages.append(ChatResponse(
             id=row["id"],
             user_message=row["user_message"],
