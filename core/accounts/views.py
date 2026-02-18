@@ -13,6 +13,8 @@ from .serializers import (
     PartnerRegistrationCompleteSerializer,
     PartnerProfileSerializer,
     PartnerProfileUpdateSerializer,
+    TravelerProfileSerializer,
+    TravelerProfileUpdateSerializer,
     LoginSerializer,
     ForgotPasswordSerializer,
     VerifyOTPSerializer,
@@ -603,6 +605,78 @@ class PartnerProfileView(APIView):
             }, status=status.HTTP_200_OK)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class TravelerProfileView(APIView):
+    """
+    GET: Retrieve traveler profile (own profile only)
+    PATCH: Update traveler profile including profile picture (own profile only)
+    """
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        responses={200: TravelerProfileSerializer},
+        tags=['Traveler Profile'],
+        description="Get authenticated traveler's profile"
+    )
+    def get(self, request):
+        user = request.user
+        
+        # Check if user has a traveler profile
+        if not hasattr(user, 'traveler_profile'):
+            return Response({
+                'message': 'Traveler profile not found',
+                'status': 'error'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        traveler_profile = user.traveler_profile
+        serializer = TravelerProfileSerializer(traveler_profile, context={'request': request})
+        
+        return Response({
+            'message': 'Traveler profile retrieved successfully',
+            'profile': serializer.data
+        }, status=status.HTTP_200_OK)
+    
+    @extend_schema(
+        request={'application/json': {'type': 'object', 'properties': {'bio': {'type': 'string'}, 'profile_picture': {'type': 'string', 'format': 'binary'}}}},
+        responses={200: TravelerProfileSerializer},
+        tags=['Traveler Profile'],
+        description="Update authenticated traveler's profile (including profile picture)"
+    )
+    def patch(self, request):
+        user = request.user
+        
+        # Check if user has a traveler profile
+        if not hasattr(user, 'traveler_profile'):
+            return Response({
+                'message': 'Traveler profile not found',
+                'status': 'error'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        traveler_profile = user.traveler_profile
+        serializer = TravelerProfileUpdateSerializer(
+            traveler_profile, 
+            data=request.data, 
+            partial=True,
+            context={'request': request}
+        )
+        
+        if serializer.is_valid():
+            serializer.save()
+            
+            # Return updated profile
+            updated_serializer = TravelerProfileSerializer(traveler_profile, context={'request': request})
+            
+            return Response({
+                'message': 'Traveler profile updated successfully',
+                'profile': updated_serializer.data
+            }, status=status.HTTP_200_OK)
+        
+        return Response({
+            'message': 'Validation error',
+            'errors': serializer.errors,
+            'status': 'error'
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 
 class TravelerTermsView(APIView):
