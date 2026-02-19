@@ -7,9 +7,6 @@ services:
       POSTGRES_PASSWORD: hotel_pass
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"  # Simplified port mapping
-    command: postgres -c listen_addresses='*'
     networks:
       - hotel_network
     healthcheck:
@@ -27,20 +24,26 @@ services:
     volumes:
       - ./core:/app
       - ./AIHotel:/app/AIHotel
-    ports:
-      - "8000:8000"  # Main Django app
+      - static_volume:/app/static
+      - media_volume:/app/media
+    expose:
+      - "8000"
     environment:
       DB_ENGINE: django.db.backends.postgresql
       DB_NAME: hotel_db
       DB_USER: hotel_user
       DB_PASSWORD: hotel_pass
-      DB_HOST: db  # Use service name
+      DB_HOST: db
       DB_PORT: "5432"
-      DEBUG: "True"
+      DEBUG: "False"
+      ALLOWED_HOSTS: "app.tri2directaitravel.com.au,localhost,127.0.0.1"
+      CSRF_TRUSTED_ORIGINS: "https://app.tri2directaitravel.com.au"
     networks:
       - hotel_network
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    restart: unless-stopped
 
   ai_chat_api:
     build:
@@ -49,10 +52,10 @@ services:
     command: python api_server.py
     volumes:
       - ./AIHotel:/app
-    ports:
-      - "8001:8001"  # AI Chat API
+    expose:
+      - "8001"
     environment:
-      DB_HOST: db  # Use service name
+      DB_HOST: db
       DB_PORT: "5432"
       DB_NAME: hotel_db
       DB_USER: hotel_user
@@ -65,10 +68,40 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    restart: "no"
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./certbot/www:/var/www/certbot:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - static_volume:/app/static:ro
+      - media_volume:/app/media:ro
+    networks:
+      - hotel_network
+    depends_on:
+      - web
+      - ai_chat_api
+    restart: unless-stopped
+
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - ./certbot/www:/var/www/certbot
+      - ./certbot/conf:/etc/letsencrypt
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    networks:
+      - hotel_network
 
 volumes:
   postgres_data:
+  static_volume:
+  media_volume:
 
 networks:
   hotel_network:
