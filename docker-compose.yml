@@ -8,8 +8,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5433:5432"
-    # Allow remote connections
+      - "5432:5432"  # Simplified port mapping
     command: postgres -c listen_addresses='*'
     networks:
       - hotel_network
@@ -18,22 +17,24 @@ services:
     build:
       context: ./core
       dockerfile: Dockerfile
-    command: daphne -b 0.0.0.0 -p 8000 core.asgi:application
+    command: python manage.py runserver 0.0.0.0:8000
     volumes:
       - ./core:/app
-      - ./AIHotel:/app/AIHotel  # Mount AIHotel directory
+      - ./AIHotel:/app/AIHotel
     ports:
-      - "8000:8000"
-      - "8002:8000"
+      - "8000:8000"  # Main Django app
     environment:
       DB_ENGINE: django.db.backends.postgresql
       DB_NAME: hotel_db
       DB_USER: hotel_user
       DB_PASSWORD: hotel_pass
-      DB_HOST: "10.10.13.27"
-      DB_PORT: "5433"
+      DB_HOST: db  # Use service name
+      DB_PORT: "5432"
+      DEBUG: "True"
     networks:
       - hotel_network
+    depends_on:
+      - db
 
   ai_chat_api:
     build:
@@ -42,18 +43,19 @@ services:
     command: python api_server.py
     volumes:
       - ./AIHotel:/app
-      - ./AIHotel/secret_key.txt:/app/secret_key.txt:ro
     ports:
-      - "8001:8001"
+      - "8001:8001"  # AI Chat API
     environment:
-      DB_HOST: "10.10.13.27"
-      DB_PORT: "5433"
+      DB_HOST: db  # Use service name
+      DB_PORT: "5432"
       DB_NAME: hotel_db
       DB_USER: hotel_user
       DB_PASSWORD: hotel_pass
       GROQ_API_KEY: "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"
     networks:
       - hotel_network
+    depends_on:
+      - db
     restart: unless-stopped
 
 volumes:
