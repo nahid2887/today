@@ -58,12 +58,14 @@ services:
       DB_USER: hotel_user
       DB_PASSWORD: hotel_pass
       GROQ_API_KEY: "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"
+      ASYNCPG_TIMEOUT: "60"
+      STARTUP_TIMEOUT: "180"
     networks:
       - hotel_network
     depends_on:
       db:
         condition: service_healthy
-    restart: on-failure:5
+    restart: "no"
 
 volumes:
   postgres_data:
