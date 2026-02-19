@@ -12,6 +12,12 @@ services:
     command: postgres -c listen_addresses='*'
     networks:
       - hotel_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hotel_user -d hotel_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   web:
     build:
@@ -55,8 +61,9 @@ services:
     networks:
       - hotel_network
     depends_on:
-      - db
-    restart: unless-stopped
+      db:
+        condition: service_healthy
+    restart: on-failure:5
 
 volumes:
   postgres_data:
