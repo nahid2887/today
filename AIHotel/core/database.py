@@ -6,6 +6,7 @@ replacing the API sync approach with direct PostgreSQL queries.
 """
 import asyncpg
 import logging
+import os
 from typing import List, Dict, Any, Optional
 from contextlib import asynccontextmanager
 
@@ -14,20 +15,13 @@ logger = logging.getLogger(__name__)
 
 
 class DatabaseConfig:
-    """PostgreSQL connection configuration."""
-    # Previous configuration
-    HOST = "10.10.13.27"
-    PORT = 5433
-    DATABASE = "hotel_db"
-    USER = "hotel_user"
-    PASSWORD = "hotel_pass"
-
-    # New configuration (10.10.13.121)
-    # HOST = "10.10.13.127"
-    # PORT = 5432
-    # DATABASE = "hotel_db"
-    # USER = "mobashir"
-    # PASSWORD = "password"
+    """PostgreSQL connection configuration using environment variables."""
+    # Use environment variables with fallback to defaults
+    HOST = os.getenv("DB_HOST", "10.10.13.27")
+    PORT = int(os.getenv("DB_PORT", "5433"))
+    DATABASE = os.getenv("DB_NAME", "hotel_db")
+    USER = os.getenv("DB_USER", "hotel_user")
+    PASSWORD = os.getenv("DB_PASSWORD", "hotel_pass")
     
     @classmethod
     def get_connection_string(cls) -> str:
@@ -57,15 +51,18 @@ class HotelDatabase:
         """Create connection pool to PostgreSQL."""
         if self.pool is None:
             try:
+                timeout = int(os.getenv("ASYNCPG_TIMEOUT", "60"))
+                logger.info(f"Connecting to database at {self.config.HOST}:{self.config.PORT}...")
                 self.pool = await asyncpg.create_pool(
                     host=self.config.HOST,
                     port=self.config.PORT,
                     database=self.config.DATABASE,
                     user=self.config.USER,
                     password=self.config.PASSWORD,
-                    min_size=2,
+                    min_size=1,
                     max_size=10,
-                    command_timeout=60
+                    command_timeout=timeout,
+                    timeout=timeout
                 )
                 logger.info("✅ Connected to PostgreSQL database")
             except Exception as e:
