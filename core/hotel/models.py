@@ -340,3 +340,48 @@ class Notification(models.Model):
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat(),
         }
+
+
+class Payout(models.Model):
+    """Model to manage partner payouts"""
+    
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('processing', 'Processing'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+        ('cancelled', 'Cancelled'),
+    ]
+    
+    partner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payouts')
+    hotel = models.ForeignKey(Hotel, on_delete=models.CASCADE, related_name='payouts', null=True, blank=True)
+    
+    amount = models.DecimalField(max_digits=10, decimal_places=2, help_text="Payout amount in USD")
+    currency = models.CharField(max_length=3, default='USD')
+    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    
+    # Stripe Integration
+    stripe_payout_id = models.CharField(max_length=255, blank=True, null=True)
+    stripe_account_id = models.CharField(max_length=255, blank=True, null=True)
+    payout_url = models.URLField(blank=True, null=True, help_text="Link for partner to complete payout")
+    
+    # Bank Account Info
+    bank_account_last4 = models.CharField(max_length=4, blank=True, null=True)
+    
+    description = models.TextField(blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    completed_at = models.DateTimeField(blank=True, null=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['partner', '-created_at']),
+            models.Index(fields=['status']),
+        ]
+    
+    def __str__(self):
+        return f"Payout ${self.amount} - {self.partner.username} ({self.status})"

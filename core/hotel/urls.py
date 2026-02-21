@@ -17,7 +17,11 @@ from .views import (
     HotelBulkSyncView,
     HotelRealTimeDetailView,
     # Image Upload
-    HotelImageUploadView
+    HotelImageUploadView,
+    # Payouts
+    PayoutCreateView,
+    PayoutCompleteView,
+    PayoutListView
 )
 from .notification_views import (
     NotificationListView,
@@ -58,6 +62,11 @@ urlpatterns = [
     # ========== AI SYSTEM ENDPOINTS ==========
     path('sync/', HotelBulkSyncView.as_view(), name='hotel_bulk_sync'),  # GET - Bulk sync for RAG
     path('ai/details/<int:hotel_id>/', HotelRealTimeDetailView.as_view(), name='hotel_realtime_detail'),  # GET - Real-time details
+    
+    # ========== PAYOUT ENDPOINTS ==========
+    path('payouts/create/', PayoutCreateView.as_view(), name='payout_create'),  # POST - Create payout link
+    path('payouts/', PayoutListView.as_view(), name='payout_list'),  # GET - List partner payouts
+    path('payouts/<int:pk>/complete/', PayoutCompleteView.as_view(), name='payout_complete'),  # GET - Complete payout
 ]
 
 
