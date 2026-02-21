@@ -1,0 +1,112 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: hotel_db
+      POSTGRES_USER: hotel_user
+      POSTGRES_PASSWORD: hotel_pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - hotel_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hotel_user -d hotel_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./core
+      dockerfile: Dockerfile
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./core:/app
+      - ./AIHotel:/app/AIHotel
+      - static_volume:/app/static
+      - media_volume:/app/media
+    expose:
+      - "8000"
+    environment:
+      DB_ENGINE: django.db.backends.postgresql
+      DB_NAME: hotel_db
+      DB_USER: hotel_user
+      DB_PASSWORD: hotel_pass
+      DB_HOST: db
+      DB_PORT: "5432"
+      DEBUG: "False"
+      ALLOWED_HOSTS: "app.tri2directaitravel.com.au,localhost,127.0.0.1"
+      CSRF_TRUSTED_ORIGINS: "https://app.tri2directaitravel.com.au"
+    networks:
+      - hotel_network
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  ai_chat_api:
+    build:
+      context: ./AIHotel
+      dockerfile: Dockerfile
+    command: python api_server.py
+    volumes:
+      - ./AIHotel:/app
+    expose:
+      - "8001"
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: hotel_db
+      DB_USER: hotel_user
+      DB_PASSWORD: hotel_pass
+      GROQ_API_KEY: "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"
+      ASYNCPG_TIMEOUT: "60"
+      STARTUP_TIMEOUT: "180"
+    networks:
+      - hotel_network
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx-prod/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx-prod/conf.d:/etc/nginx/conf.d:ro
+      - ./certbot/www:/var/www/certbot:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - static_volume:/app/static:ro
+      - media_volume:/app/media:ro
+    networks:
+      - hotel_network
+    depends_on:
+      - web
+      - ai_chat_api
+    restart: unless-stopped
+
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - ./certbot/www:/var/www/certbot
+      - ./certbot/conf:/etc/letsencrypt
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --quiet; sleep 12h & wait $${!}; done;'"
+    networks:
+      - hotel_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  static_volume:
+  media_volume:
+
+networks:
+  hotel_network:
+    driver: bridge
