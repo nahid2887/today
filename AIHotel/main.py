@@ -226,7 +226,9 @@ async def main():
                 filter_parts = []
                 if filters.get('city'):
                     filter_parts.append(f"City: {filters['city']}")
-                if filters.get('min_rating'):
+                if filters.get('min_rating') and filters.get('max_rating'):
+                    filter_parts.append(f"Rating: {filters['min_rating']}-{filters['max_rating']}")
+                elif filters.get('min_rating'):
                     filter_parts.append(f"Min Rating: {filters['min_rating']}")
                 if filters.get('max_price'):
                     filter_parts.append(f"Max Price: ${filters['max_price']}")

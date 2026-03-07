@@ -35,6 +35,7 @@ from pydantic import BaseModel
 from jose import JWTError, jwt
 
 from main import run_travel_chat, initialize_system
+from core.database import DatabaseConfig
 
 # Logging setup
 logging.basicConfig(
@@ -113,11 +114,11 @@ async def get_db_pool() -> asyncpg.Pool:
 
     if db_pool is None:
         db_pool = await asyncpg.create_pool(
-            host=os.getenv("DB_HOST", "10.10.13.27"),
-            port=int(os.getenv("DB_PORT", 5433)),
-            database=os.getenv("DB_NAME", "hotel_db"),
-            user=os.getenv("DB_USER", "hotel_user"),
-            password=os.getenv("DB_PASSWORD", "hotel_pass"),
+            host=DatabaseConfig.HOST,
+            port=DatabaseConfig.PORT,
+            database=DatabaseConfig.DATABASE,
+            user=DatabaseConfig.USER,
+            password=DatabaseConfig.PASSWORD,
             min_size=5,
             max_size=20,
         )

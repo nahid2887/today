@@ -5,6 +5,7 @@ This module provides direct database access for real-time queries,
 replacing the API sync approach with direct PostgreSQL queries.
 """
 import asyncpg
+import json
 import logging
 import os
 from typing import List, Dict, Any, Optional
@@ -17,8 +18,16 @@ logger = logging.getLogger(__name__)
 class DatabaseConfig:
     """PostgreSQL connection configuration using environment variables."""
     # Use environment variables with fallback to defaults
-    HOST = os.getenv("DB_HOST", "10.10.13.27")
-    PORT = int(os.getenv("DB_PORT", "5433"))
+    # Previous credentials (local/internal network):
+    # HOST = os.getenv("DB_HOST", "10.10.13.27")
+    # PORT = int(os.getenv("DB_PORT", "5432"))
+    # DATABASE = os.getenv("DB_NAME", "hotel_db")
+    # USER = os.getenv("DB_USER", "hotel_user")
+    # PASSWORD = os.getenv("DB_PASSWORD", "hotel_pass")
+
+    # New credentials (Hostinger VPS - public IP):
+    HOST = os.getenv("DB_HOST", "76.13.195.67")
+    PORT = int(os.getenv("DB_PORT", "5432"))
     DATABASE = os.getenv("DB_NAME", "hotel_db")
     USER = os.getenv("DB_USER", "hotel_user")
     PASSWORD = os.getenv("DB_PASSWORD", "hotel_pass")
@@ -59,6 +68,7 @@ class HotelDatabase:
                     database=self.config.DATABASE,
                     user=self.config.USER,
                     password=self.config.PASSWORD,
+                    ssl=False,
                     min_size=1,
                     max_size=10,
                     command_timeout=timeout,
@@ -129,6 +139,9 @@ class HotelDatabase:
                 base_price_per_night, commission_rate, updated_at as last_updated
             FROM hotel_hotel
             WHERE is_approved = 'approved'
+            AND city IS NOT NULL AND city != ''
+            AND base_price_per_night IS NOT NULL AND base_price_per_night > 0
+            AND average_rating > 0
             """
         ]
         params = []
@@ -164,14 +177,16 @@ class HotelDatabase:
             param_count += 2
         
         # Rating filters
+        # NOTE: DB stores ratings on a 5-star scale (0.0-5.0).
+        # All user-facing values use a 10-point scale, so divide by 2 before querying.
         if min_rating is not None:
             query_parts.append(f"AND average_rating >= ${param_count}")
-            params.append(min_rating)
+            params.append(min_rating / 2.0)
             param_count += 1
         
         if max_rating is not None:
             query_parts.append(f"AND average_rating < ${param_count}")
-            params.append(max_rating)
+            params.append(max_rating / 2.0)
             param_count += 1
         
         # Price filters (assuming base_price_per_night is stored as numeric/decimal)
@@ -189,7 +204,6 @@ class HotelDatabase:
         if amenities:
             for amenity in amenities:
                 query_parts.append(f"AND amenities @> ${param_count}::jsonb")
-                import json
                 params.append(json.dumps([amenity]))
                 param_count += 1
         
@@ -214,8 +228,10 @@ class HotelDatabase:
                         hotel['base_price_per_night'] = float(hotel['base_price_per_night'])
                     if hotel.get('commission_rate'):
                         hotel['commission_rate'] = float(hotel['commission_rate'])
+                    # DB stores ratings on 5-star scale — convert to 10-point for all consumers
+                    if hotel.get('average_rating') is not None:
+                        hotel['average_rating'] = round(float(hotel['average_rating']) * 2.0, 1)
                     # Convert JSONB fields to Python lists
-                    import json
                     amenities_json = hotel.get('amenities', [])
                     if isinstance(amenities_json, str):
                         hotel['amenities'] = json.loads(amenities_json)
@@ -271,6 +287,9 @@ class HotelDatabase:
                         hotel['base_price_per_night'] = float(hotel['base_price_per_night'])
                     if hotel.get('commission_rate'):
                         hotel['commission_rate'] = float(hotel['commission_rate'])
+                    # DB stores ratings on 5-star scale — convert to 10-point
+                    if hotel.get('average_rating') is not None:
+                        hotel['average_rating'] = round(float(hotel['average_rating']) * 2.0, 1)
                     hotel['amenities'] = list(hotel.get('amenities', []))
                     hotel['images'] = list(hotel.get('images', []))
                     return hotel
@@ -291,18 +310,21 @@ class HotelDatabase:
         """
         query = """
             WITH city_list AS (
-                -- Get cities from city field
+                -- Get cities from city field (only cities with at least 1 valid/rated hotel)
                 SELECT DISTINCT TRIM(city) as city_name
                 FROM hotel_hotel 
                 WHERE city IS NOT NULL AND city != '' AND is_approved = 'approved'
+                  AND average_rating > 0 AND base_price_per_night IS NOT NULL
+                  AND base_price_per_night > 0
                 
                 UNION
                 
                 -- Extract city names from location field
-                -- Split by comma and take first part (common format: "City, Country")
                 SELECT DISTINCT TRIM(SPLIT_PART(location, ',', 1)) as city_name
                 FROM hotel_hotel 
                 WHERE location IS NOT NULL AND location != '' AND is_approved = 'approved'
+                  AND average_rating > 0 AND base_price_per_night IS NOT NULL
+                  AND base_price_per_night > 0
             )
             SELECT city_name FROM city_list 
             WHERE city_name IS NOT NULL AND city_name != ''

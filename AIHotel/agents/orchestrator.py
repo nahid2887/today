@@ -10,17 +10,18 @@ CRITICAL PROTOCOL: Agent is FORBIDDEN from external APIs.
 Only the CLOSED DATABASE is used for hotel searches.
 """
 import logging
+import re
+import time
 from typing import Dict, Any, List, TypedDict, Literal, Optional
 from enum import Enum
 
 from langgraph.graph import StateGraph, END
-from langchain_openai import ChatOpenAI
 from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from agents.hotel_agent import HotelRecommendationAgent
 from core.integrated_search import IntegratedHotelSearch
-from config import OPENAI_API_KEY, OPENAI_MODEL, GROQ_API_KEY, GROQ_MODEL
+from config import GROQ_API_KEY, GROQ_MODEL, GROQ_MODEL_FAST
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -68,48 +69,25 @@ class TravelOrchestrator:
         """
         self.search_system = search_system
         
-        # Initialize LLM (Groq primary, OpenAI temporarily commented out)
-        try:
-            # TEMPORARILY COMMENTED OUT - Using Groq instead
-            # if OPENAI_API_KEY:
-            #     self.llm = ChatOpenAI(
-            #         api_key=OPENAI_API_KEY,
-            #         model=OPENAI_MODEL,
-            #         temperature=0.3,
-            #         max_tokens=1024
-            #     )
-            #     logger.info(f"Orchestrator using OpenAI model: {OPENAI_MODEL}")
-            # elif GROQ_API_KEY:
-            if GROQ_API_KEY:
-                self.llm = ChatGroq(
-                    groq_api_key=GROQ_API_KEY,
-                    model_name=GROQ_MODEL,
-                    temperature=0.3,
-                    max_tokens=1024
-                )
-                # Cheap LLM for classify + query correction (returns 2 lines)
-                self.llm_classifier = ChatGroq(
-                    groq_api_key=GROQ_API_KEY,
-                    model_name=GROQ_MODEL,
-                    temperature=0.0,
-                    max_tokens=80
-                )
-                logger.info(f"Orchestrator using Groq model: {GROQ_MODEL}")
-            else:
-                raise ValueError("No LLM API key found. Set GROQ_API_KEY (OpenAI temporarily disabled)")
-        except Exception as e:
-            # # Fallback to Groq if OpenAI fails (TEMPORARILY DISABLED)
-            # if GROQ_API_KEY and "openai" in str(e).lower():
-            #     logger.warning(f"OpenAI initialization failed: {e}. Falling back to Groq")
-            #     self.llm = ChatGroq(
-            #         groq_api_key=GROQ_API_KEY,
-            #         model_name=GROQ_MODEL,
-            #         temperature=0.3,
-            #         max_tokens=1024
-            #     )
-            # else:
-            #     raise
-            raise
+        # Initialize LLM (Groq)
+        if not GROQ_API_KEY:
+            raise ValueError("No GROQ_API_KEY found. Set GROQ_API_KEY environment variable.")
+
+        # Main LLM: travel info / normal chat responses (quality matters).
+        self.llm = ChatGroq(
+            groq_api_key=GROQ_API_KEY,
+            model_name=GROQ_MODEL,
+            temperature=0.3,
+            max_tokens=512
+        )
+        # Fast LLM: classify + query correction — cheap calls, 500K TPD on free plan.
+        self.llm_classifier = ChatGroq(
+            groq_api_key=GROQ_API_KEY,
+            model_name=GROQ_MODEL_FAST,
+            temperature=0.0,
+            max_tokens=80
+        )
+        logger.info(f"Orchestrator using Groq models: {GROQ_MODEL} (main) / {GROQ_MODEL_FAST} (classifier)")
         
         # Initialize hotel search agent
         self.hotel_agent = HotelRecommendationAgent(search_system)
@@ -159,7 +137,56 @@ class TravelOrchestrator:
         workflow.add_edge("hotel_search", END)
         
         return workflow.compile()
-    
+
+    @staticmethod
+    def _parse_groq_wait(err_str: str) -> float:
+        """Parse Groq's retry wait. Handles '6m30.527s' and '45.3s' formats."""
+        m = re.search(r'try again in (\d+)m(\d+(?:\.\d+)?)s', err_str, re.IGNORECASE)
+        if m:
+            return int(m.group(1)) * 60 + float(m.group(2))
+        m = re.search(r'try again in (\d+(?:\.\d+)?)s', err_str, re.IGNORECASE)
+        if m:
+            return float(m.group(1))
+        return 60.0
+
+    @staticmethod
+    def _is_tpd(err_str: str) -> bool:
+        """True if 429 is a daily quota (TPD) — not worth retrying in same session."""
+        el = err_str.lower()
+        return 'tokens per day' in el or '(tpd)' in el or 'per day' in el
+
+    def _llm_invoke_with_retry(self, llm, messages, max_retries: int = 2):
+        """
+        Retry only for TPM (per-minute) limits (capped at 90s wait).
+        TPD (daily quota) raises immediately — no point waiting.
+        """
+        for attempt in range(max_retries):
+            try:
+                return llm.invoke(messages)
+            except Exception as e:
+                err_str = str(e)
+                is_rate_limit = ('429' in err_str or
+                                 'rate_limit' in err_str.lower() or
+                                 'rate limit' in err_str.lower() or
+                                 'tokens per' in err_str.lower())
+                if is_rate_limit:
+                    if self._is_tpd(err_str):
+                        logger.warning(
+                            "[RATE LIMIT] Groq daily token quota (TPD) exhausted. "
+                            "Will not retry. Resets in ~24h."
+                        )
+                        raise
+                    if attempt < max_retries - 1:
+                        wait_sec = min(self._parse_groq_wait(err_str) + 3.0, 90.0)
+                        logger.warning(
+                            f"[RATE LIMIT] Groq TPM limit. "
+                            f"Pausing {wait_sec:.0f}s before retry {attempt + 2}/{max_retries}..."
+                        )
+                        time.sleep(wait_sec)
+                        continue
+                raise
+        raise RuntimeError("LLM max retries exceeded")
+
     async def _classify_query(self, state: OrchestratorState) -> Dict[str, Any]:
         """
         Classify the user query AND resolve query context in one LLM call.
@@ -172,7 +199,6 @@ class TravelOrchestrator:
 
         logger.info(f"[CLASSIFY] Analyzing query: {query}")
 
-        import re
         # Fast pattern-match FIRST — skip DB call + LLM entirely for greetings
         conversational_patterns = [
             r'\bhello\b', r'\bhi\b', r'\bhey\b', r'\bgreetings\b', r'\bgood morning\b',
@@ -184,6 +210,24 @@ class TravelOrchestrator:
         if any(re.search(pattern, query_lower) for pattern in conversational_patterns):
             logger.info("[CLASSIFY] Pattern matched: NORMAL_CHAT")
             return {**state, "query_type": QueryType.NORMAL_CHAT.value}
+
+        # Fast pattern-match for TRAVEL_INFO queries (before hitting LLM)
+        travel_info_patterns = [
+            r'\bbest time to visit\b', r'\bwhen to visit\b', r'\bwhen is.*best.*visit\b',
+            r'\bplanning a trip\b', r'\bplanning.*trip to\b',
+            r'\bwhat should (i|we) know\b', r'\bwhat to (know|expect|do|see)\b',
+            r'\bthings to do\b', r'\battraction[s]?\b', r'\bsightseeing\b',
+            r'\bweather in\b', r'\bclimate in\b',
+            r'\btravel tip[s]?\b', r'\btravel guide\b',
+            r'\bvisa\b', r'\bcurrency\b', r'\bsafe to travel\b',
+        ]
+        if any(re.search(pattern, query_lower) for pattern in travel_info_patterns):
+            # Make sure it's NOT also asking for hotels explicitly
+            hotel_keywords = ['hotel', 'accommodation', 'stay', 'room', 'book', 'find me']
+            if not any(kw in query_lower for kw in hotel_keywords):
+                logger.info("[CLASSIFY] Pattern matched: TRAVEL_INFO")
+                return {**state, "query_type": QueryType.TRAVEL_INFO.value,
+                        "corrected_query": "NONE"}
 
         # Get available cities (cached — no DB hit after first connect)
         available_cities = await self.search_system.get_available_cities()
@@ -216,7 +260,16 @@ Task 1 - CLASSIFY the user query as one of:
   HOTEL_SEARCH - finding/recommending hotels, room search, accommodation
 
 Task 2 - If HOTEL_SEARCH, produce a CORRECTED QUERY following these rules:
-  - Fix city name typos ("cumilla" -> "Comilla", "sydny" -> "Sydney")
+  - Fix REAL city name typos. Common examples:
+      "sydny"       -> "Sydney"
+      "bangkk"      -> "Bangkok"
+      "tokio"       -> "Tokyo"
+      "los angels"  -> "Los Angeles"
+      "las vegaas"  -> "Las Vegas"
+      "new yok"     -> "New York"
+      "lon don"     -> "London"
+  - IMPORTANT: If the city looks like random letters, numbers, or gibberish (e.g. "xyz123",
+    "asdfjkl", "qwerty"), do NOT guess a city — keep the original text as-is.
   - If the user does NOT mention a city, CARRY OVER the last city from conversation
     history. Users typically stay in the same city across a session.
     Examples (last city was Melbourne):
@@ -238,7 +291,9 @@ Respond in EXACTLY this format (two lines):
 TYPE: <NORMAL_CHAT|TRAVEL_INFO|HOTEL_SEARCH>
 QUERY: <corrected search query, or NONE if not hotel search>"""
 
-            response = self.llm_classifier.invoke([HumanMessage(content=combined_prompt)])
+            response = self._llm_invoke_with_retry(
+                self.llm_classifier, [HumanMessage(content=combined_prompt)]
+            )
             raw = response.content.strip()
 
             # Parse the two-line response
@@ -268,12 +323,22 @@ QUERY: <corrected search query, or NONE if not hotel search>"""
 
         except Exception as e:
             logger.error(f"Classification error: {e}")
-            # Fallback
+            # Fallback: keyword-based classification (no LLM needed)
             convos = ['hello', 'hi', 'hey', 'thanks', 'thank you', 'bye', 'goodbye',
                       'good morning', 'good afternoon', 'good evening', 'how are you']
             if any(p in query_lower for p in convos):
-                return {**state, "query_type": QueryType.NORMAL_CHAT.value}
-            return {**state, "query_type": QueryType.HOTEL_SEARCH.value}
+                return {**state, "query_type": QueryType.NORMAL_CHAT.value,
+                        "corrected_query": query}
+            travel_info_kw = ['best time to visit', 'when to visit', 'planning a trip',
+                              'what should i know', 'things to do', 'weather in',
+                              'travel tip', 'attractions', 'sightseeing', 'visa', 'currency']
+            if any(kw in query_lower for kw in travel_info_kw):
+                hotel_kw = ['hotel', 'accommodation', 'stay', 'room']
+                if not any(kw in query_lower for kw in hotel_kw):
+                    return {**state, "query_type": QueryType.TRAVEL_INFO.value,
+                            "corrected_query": query}
+            return {**state, "query_type": QueryType.HOTEL_SEARCH.value,
+                    "corrected_query": query}
     
     def _route_query(self, state: OrchestratorState) -> str:
         """
@@ -321,7 +386,7 @@ Respond naturally and offer to help with travel planning or hotel search."""
                 HumanMessage(content=user_prompt)
             ]
             
-            response = self.llm.invoke(messages)
+            response = self._llm_invoke_with_retry(self.llm, messages)
             response_text = response.content.strip()
             
             logger.info(f"[NORMAL_CHAT] Response: {response_text[:100]}...")
@@ -389,7 +454,7 @@ Provide helpful travel information and offer to help find hotels if needed."""
                 HumanMessage(content=user_prompt)
             ]
             
-            response = self.llm.invoke(messages)
+            response = self._llm_invoke_with_retry(self.llm, messages)
             response_text = response.content.strip()
             
             logger.info(f"[TRAVEL_INFO] Response: {response_text[:100]}...")

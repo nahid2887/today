@@ -7,10 +7,9 @@ for direct database access.
 import logging
 import re
 from typing import Dict, Any, Optional, List
-from langchain_openai import ChatOpenAI
 from langchain_groq import ChatGroq
 from langchain_core.messages import SystemMessage, HumanMessage
-from config import OPENAI_API_KEY, OPENAI_MODEL, GROQ_API_KEY, GROQ_MODEL
+from config import GROQ_API_KEY, GROQ_MODEL
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -29,10 +28,10 @@ class NLtoSQLConverter:
     
     # Database schema for context
     SCHEMA = """
-    Table: hotels_hotelprofile
+    Table: hotel_hotel
     Columns:
     - id (INTEGER, PRIMARY KEY)
-    - partner_name (VARCHAR)
+    - partner_id (INTEGER)
     - hotel_name (VARCHAR) - Hotel's display name
     - description (TEXT) - Hotel description
     - location (VARCHAR) - Street address
@@ -42,7 +41,7 @@ class NLtoSQLConverter:
     - images (TEXT[]) - Array of image URLs
     - room_type (VARCHAR) - Room type: 'standard', 'deluxe', 'suite', 'presidential'
     - number_of_rooms (INTEGER) - Total rooms in hotel
-    - average_rating (DECIMAL) - Average rating 0.0-5.0
+    - average_rating (DECIMAL) - Average rating 0.0-10.0
     - total_ratings (INTEGER) - Number of reviews
     - base_price_per_night (DECIMAL) - Price per night in USD
     - commission_rate (DECIMAL) - Commission percentage
@@ -58,41 +57,17 @@ class NLtoSQLConverter:
     
     def __init__(self):
         """Initialize the NL-to-SQL converter."""
-        # Initialize LLM (Groq primary, OpenAI temporarily commented out)
-        try:
-            # TEMPORARILY COMMENTED OUT - Using Groq instead
-            # if OPENAI_API_KEY:
-            #     self.llm = ChatOpenAI(
-            #         api_key=OPENAI_API_KEY,
-            #         model=OPENAI_MODEL,
-            #         temperature=0.0,  # Deterministic for SQL generation
-            #         max_tokens=1024
-            #     )
-            #     logger.info(f"NLtoSQLConverter using OpenAI model: {OPENAI_MODEL}")
-            # elif GROQ_API_KEY:
-            if GROQ_API_KEY:
-                self.llm = ChatGroq(
-                    groq_api_key=GROQ_API_KEY,
-                    model_name=GROQ_MODEL,
-                    temperature=0.0,
-                    max_tokens=1024
-                )
-                logger.info(f"NLtoSQLConverter using Groq model: {GROQ_MODEL}")
-            else:
-                raise ValueError("No LLM API key found. Set GROQ_API_KEY (OpenAI temporarily disabled)")
-        except Exception as e:
-            # # Fallback to Groq if OpenAI fails (TEMPORARILY DISABLED)
-            # if GROQ_API_KEY and "openai" in str(e).lower():
-            #     logger.warning(f"OpenAI initialization failed: {e}. Falling back to Groq")
-            #     self.llm = ChatGroq(
-            #         groq_api_key=GROQ_API_KEY,
-            #         model_name=GROQ_MODEL,
-            #         temperature=0.0,
-            #         max_tokens=1024
-            #     )
-            # else:
-            #     raise
-            raise
+        # Initialize LLM (Groq)
+        if not GROQ_API_KEY:
+            raise ValueError("No GROQ_API_KEY found. Set GROQ_API_KEY environment variable.")
+        
+        self.llm = ChatGroq(
+            groq_api_key=GROQ_API_KEY,
+            model_name=GROQ_MODEL,
+            temperature=0.0,
+            max_tokens=1024
+        )
+        logger.info(f"NLtoSQLConverter using Groq model: {GROQ_MODEL}")
         logger.info("NLtoSQLConverter initialized")
     
     def generate_sql(self, natural_query: str) -> Dict[str, Any]:
@@ -178,9 +153,8 @@ IMPORTANT:
 - Use parameterized queries ALWAYS
 - Never use string concatenation for values
 - Handle case-insensitivity properly
-"""
-
-        user_prompt = f"""Generate a PostgreSQL query for this request:
+- ALWAYS include WHERE is_approved = 'approved'
+- Table name is hotel_hotel (NOT hotels_hotelprofile)
 
 "{natural_query}"
 
@@ -272,8 +246,8 @@ Return ONLY the JSON object, no other text."""
         
         return {
             "sql": """
-                SELECT * FROM hotels_hotelprofile 
-                WHERE average_rating > 0 
+                SELECT * FROM hotel_hotel 
+                WHERE is_approved = 'approved' AND average_rating > 0 
                 ORDER BY average_rating DESC, total_ratings DESC 
                 LIMIT $1
             """,

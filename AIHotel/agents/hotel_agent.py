@@ -9,23 +9,24 @@ This module implements a multi-stage agentic workflow:
 import logging
 import re
 import json
+import time
 from typing import Dict, Any, List, TypedDict, Annotated, Optional
 from operator import add
 
 from langgraph.graph import StateGraph, END
-from langchain_openai import ChatOpenAI
 from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from core.integrated_search import IntegratedHotelSearch
+from tools.tavily_hotel_search import TavilyHotelSearch
 from config import (
-    OPENAI_API_KEY,
-    OPENAI_MODEL,
     GROQ_API_KEY,
     GROQ_MODEL,
+    GROQ_MODEL_FAST,
     RATING_WEIGHT,
     SIMILARITY_WEIGHT,
-    TOP_K_RESULTS
+    TOP_K_RESULTS,
+    TAVILY_API_KEY
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -62,6 +63,7 @@ class AgentState(TypedDict):
     filters_applied: Dict[str, Any]  # Store applied filters
     last_hotels: List[Dict[str, Any]]  # Memory: Hotels from previous turn
     is_refinement: bool  # Flag if current query is a refinement of previous results
+    is_external_search: bool  # Flag: results came from Tavily, not the DB
 
 
 class HotelRecommendationAgent:
@@ -83,53 +85,47 @@ class HotelRecommendationAgent:
         """
         self.search_system = search_system
         
-        # Initialize LLM (Groq primary, OpenAI temporarily commented out)
-        try:
-            # TEMPORARILY COMMENTED OUT - Using Groq instead
-            # if OPENAI_API_KEY:
-            #     self.llm = ChatOpenAI(
-            #         api_key=OPENAI_API_KEY,
-            #         model=OPENAI_MODEL,
-            #         temperature=0.3,
-            #         max_tokens=1024
-            #     )
-            #     self.llm_provider = "OpenAI"
-            #     logger.info(f"Using OpenAI model: {OPENAI_MODEL}")
-            # elif GROQ_API_KEY:
-            if GROQ_API_KEY:
-                self.llm = ChatGroq(
-                    groq_api_key=GROQ_API_KEY,
-                    model_name=GROQ_MODEL,
-                    temperature=0.3,
-                    max_tokens=1024
-                )
-                # Cheap fast LLM used only for the short query-correction call
-                self.llm_fast = ChatGroq(
-                    groq_api_key=GROQ_API_KEY,
-                    model_name=GROQ_MODEL,
-                    temperature=0.0,
-                    max_tokens=50
-                )
-                self.llm_provider = "Groq"
-                logger.info(f"Using Groq model: {GROQ_MODEL}")
+        # Initialize LLM (Groq)
+        if not GROQ_API_KEY:
+            raise ValueError("No GROQ_API_KEY found. Set GROQ_API_KEY environment variable.")
+
+        # Main LLM: used ONLY for final natural language response generation.
+        # Uses llama-3.3-70b-versatile (100K TPD free) — keep usage minimal.
+        self.llm = ChatGroq(
+            groq_api_key=GROQ_API_KEY,
+            model_name=GROQ_MODEL,
+            temperature=0.3,
+            max_tokens=512   # 2-3 sentence responses; 512 is plenty and halves token spend
+        )
+        # Fast LLM: used for ALL cheap calls (query correction, city extraction).
+        # Uses llama-3.1-8b-instant (500K TPD free) — 5× the daily headroom.
+        self.llm_fast = ChatGroq(
+            groq_api_key=GROQ_API_KEY,
+            model_name=GROQ_MODEL_FAST,
+            temperature=0.0,
+            max_tokens=80
+        )
+        self.llm_provider = "Groq"
+        logger.info(f"Using Groq models: {GROQ_MODEL} (response) / {GROQ_MODEL_FAST} (fast)")
+        
+        # Initialize Tavily external search fallback
+        if TAVILY_API_KEY:
+            self.tavily_search = TavilyHotelSearch(
+                tavily_api_key=TAVILY_API_KEY,
+                groq_api_key=GROQ_API_KEY,
+                groq_model=GROQ_MODEL_FAST   # use fast model for JSON extraction
+            )
+            if self.tavily_search.available:
+                logger.info("Tavily external hotel search: ENABLED")
             else:
-                raise ValueError("No LLM API key found. Set GROQ_API_KEY (OpenAI temporarily disabled)")
-        except Exception as e:
-            # # Fallback to Groq if OpenAI fails (TEMPORARILY DISABLED)
-            # if GROQ_API_KEY and "openai" in str(e).lower():
-            #     logger.warning(f"OpenAI initialization failed: {e}. Falling back to Groq")
-            #     self.llm = ChatGroq(
-            #         groq_api_key=GROQ_API_KEY,
-            #         model_name=GROQ_MODEL,
-            #         temperature=0.3,
-            #         max_tokens=1024
-            #     )
-            #     self.llm_provider = "Groq (fallback)"
-            # else:
-            #     raise
-            raise
+                logger.warning("Tavily client unavailable (tavily-python not installed)")
+        else:
+            self.tavily_search = None
+            logger.info("Tavily external hotel search: DISABLED (no API key)")
         
         # Build the state machine graph
+        # NOTE: The compiled graph is not directly invoked because run() 
+        # needs to mix async and sync node calls. Nodes are called manually.
         self.graph = self._build_graph()
         
         logger.info("HotelRecommendationAgent initialized with IntegratedHotelSearch")
@@ -157,7 +153,66 @@ class HotelRecommendationAgent:
         workflow.add_edge("generate_response", END)
         
         return workflow.compile()
-    
+
+    @staticmethod
+    def _parse_groq_wait(err_str: str) -> float:
+        """
+        Parse Groq's suggested retry delay from a 429 error string.
+        Handles: '6m30.527s' → 390.5s,  '45.3s' → 45.3s
+        """
+        m = re.search(r'try again in (\d+)m(\d+(?:\.\d+)?)s', err_str, re.IGNORECASE)
+        if m:
+            return int(m.group(1)) * 60 + float(m.group(2))
+        m = re.search(r'try again in (\d+(?:\.\d+)?)s', err_str, re.IGNORECASE)
+        if m:
+            return float(m.group(1))
+        return 60.0
+
+    @staticmethod
+    def _is_tpd(err_str: str) -> bool:
+        """Return True if this 429 is a daily quota exhaustion (TPD).
+        TPD resets in ~24h — retrying the same session is pointless.
+        TPM (per-minute) is transient and worth retrying."""
+        el = err_str.lower()
+        return ('tokens per day' in el or
+                '(tpd)' in el or
+                'per day' in el)
+
+    def _llm_invoke_with_retry(self, llm, messages, max_retries: int = 2):
+        """
+        Invoke an LLM with retry only for TPM (per-minute) rate limits.
+        TPD (daily quota) is raised immediately — waiting doesn't help.
+        TPM retries are capped at 90 seconds to keep UX responsive.
+        """
+        for attempt in range(max_retries):
+            try:
+                return llm.invoke(messages)
+            except Exception as e:
+                err_str = str(e)
+                is_rate_limit = ('429' in err_str or
+                                 'rate_limit' in err_str.lower() or
+                                 'rate limit' in err_str.lower() or
+                                 'tokens per' in err_str.lower())
+                if is_rate_limit:
+                    if self._is_tpd(err_str):
+                        # Daily quota gone — retrying is useless, surface immediately
+                        logger.warning(
+                            "[RATE LIMIT] Groq daily token quota (TPD) exhausted. "
+                            "Will not retry. Resets in ~24h."
+                        )
+                        raise
+                    # TPM — per-minute limit, brief wait then retry once
+                    if attempt < max_retries - 1:
+                        wait_sec = min(self._parse_groq_wait(err_str) + 3.0, 90.0)
+                        logger.warning(
+                            f"[RATE LIMIT] Groq TPM limit. "
+                            f"Pausing {wait_sec:.0f}s before retry {attempt + 2}/{max_retries}..."
+                        )
+                        time.sleep(wait_sec)
+                        continue
+                raise
+        raise RuntimeError("LLM max retries exceeded")
+
     def _extract_city_from_query(self, query: str, history: List[Dict[str, str]]) -> str:
         """
         Extract city name from user query using LLM and recent history.
@@ -191,7 +246,8 @@ Only return the city name, nothing else.
 
 City:"""
             
-            response = self.llm.invoke([HumanMessage(content=prompt)])
+            # City extraction only needs 1-3 words output — use fast model
+            response = self._llm_invoke_with_retry(self.llm_fast, [HumanMessage(content=prompt)])
             city = response.content.strip().strip('"')
             
             if city.upper() == "ANY" or not city:
@@ -294,7 +350,7 @@ User's Latest Query: "{query}"
 OUTPUT (query only, no explanation):"""
                     
                     # Use a cheap low-token LLM for this short correction call
-                    correction_response = self.llm_fast.invoke([HumanMessage(content=correction_prompt)])
+                    correction_response = self._llm_invoke_with_retry(self.llm_fast, [HumanMessage(content=correction_prompt)])
                     raw_response = correction_response.content.strip()
                     
                     # Extract query - LLM should return just the query now
@@ -399,7 +455,111 @@ OUTPUT (query only, no explanation):"""
             pass
         
         return asyncio.get_event_loop().run_until_complete(self._search_node_async(state))
-    
+
+    def _tavily_fallback_node(self, state: AgentState) -> Dict[str, Any]:
+        """
+        Fallback Node: Search externally via Tavily when the DB has no results.
+
+        Triggered when:
+          - _search_node returned 0 results (unknown city, unsupported amenity, etc.)
+          - TavilyHotelSearch is available
+
+        Returns hotels in the same schema as DB hotels, plus:
+          source = "external"
+          booking_url = direct link to hotel on booking site
+          disclaimer = user-facing warning that this is an external result
+        """
+        query = state.get('query', '')
+        filters_applied = state.get('filters_applied', {})
+        original_error = state.get('error', '')
+
+        city = None
+        # Try to get city from the extracted filter (set during _search_node)
+        if filters_applied.get('city'):
+            city = filters_applied['city']
+        # Also try to harvest from the unknown-city metadata
+        elif filters_applied.get('_unknown_city_name'):
+            city = filters_applied['_unknown_city_name']
+
+        logger.info(f"[TAVILY FALLBACK] DB returned 0 results. Searching externally for: city={city}, query='{query}'")
+
+        try:
+            # Strip internal filter keys before passing to Tavily
+            clean_filters = {
+                k: v for k, v in filters_applied.items()
+                if not k.startswith('_')
+            }
+            hotels = self.tavily_search.search(
+                query=query,
+                city=city,
+                filters=clean_filters,
+                max_results=5
+            )
+
+            if not hotels:
+                logger.info("[TAVILY FALLBACK] No external results either.")
+                return {
+                    **state,
+                    "search_results": [],
+                    "is_external_search": False,
+                    "error": original_error or "No hotels found for this location."
+                }
+
+            # Filter out 0-rated hotels (same quality bar as the DB filter)
+            rated_hotels = [h for h in hotels if h.get('average_rating', 0) > 0]
+            if rated_hotels:
+                hotels = rated_hotels
+            # else keep all (every hotel was unrated) — better than empty results
+
+            # Apply min_rating filter from user query (Tavily may return lower-rated hotels)
+            min_rating = clean_filters.get('min_rating')
+            if min_rating is not None:
+                filtered = [h for h in hotels if h.get('average_rating', 0) >= min_rating]
+                if filtered:
+                    hotels = filtered
+                    logger.info(f"[TAVILY FALLBACK] Applied min_rating={min_rating} filter: {len(hotels)} hotels remain")
+
+            # Apply max_rating filter
+            max_rating = clean_filters.get('max_rating')
+            if max_rating is not None:
+                filtered = [h for h in hotels if h.get('average_rating', 0) < max_rating]
+                if filtered:
+                    hotels = filtered
+
+            # Price-aware sorting for budget / luxury / max-price queries
+            query_lower = query.lower()
+            budget_keywords = ['cheap', 'budget', 'affordable', 'inexpensive', 'low cost']
+            luxury_keywords = ['luxury', 'premium', 'upscale', 'expensive', '5 star', 'five star']
+            if any(kw in query_lower for kw in budget_keywords) or clean_filters.get('max_price'):
+                # Sort cheapest first; push hotels with no price to end
+                hotels.sort(key=lambda h: (
+                    h.get('base_price_per_night') is None,
+                    h.get('base_price_per_night') or float('inf')
+                ))
+            elif any(kw in query_lower for kw in luxury_keywords) or clean_filters.get('min_price'):
+                # Sort most expensive first; push hotels with no price to end
+                hotels.sort(key=lambda h: (
+                    h.get('base_price_per_night') is None,
+                    -(h.get('base_price_per_night') or 0)
+                ))
+
+            logger.info(f"[TAVILY FALLBACK] Found {len(hotels)} external hotels")
+            return {
+                **state,
+                "search_results": hotels,
+                "is_external_search": True,
+                "error": ""   # clear the DB error — we have results now
+            }
+
+        except Exception as e:
+            logger.error(f"[TAVILY FALLBACK] Error: {e}")
+            return {
+                **state,
+                "search_results": [],
+                "is_external_search": False,
+                "error": original_error or str(e)
+            }
+
     def _rank_node(self, state: AgentState) -> Dict[str, Any]:
         """
         Node 2: Rank search results.
@@ -425,17 +585,21 @@ OUTPUT (query only, no explanation):"""
                     "ranked_hotels": []
                 }
             
+            def _get_price(h):
+                p = h.get('base_price_per_night') or h.get('price')
+                return float(p) if p else 999999.0
+
+            budget_kws = ["cheap", "budget", "affordable", "inexpensive", "low cost", "economy"]
+            luxury_kws = ["luxury", "premium", "upscale", "5 star", "five star", "expensive"]
+            is_budget_query = any(kw in query_lower for kw in budget_kws)
+            is_luxury_query = any(kw in query_lower for kw in luxury_kws)
+
             # Special handling for refinement queries
             if is_refinement:
                 if any(kw in query_lower for kw in ["cheap", "price", "low"]):
                     # Sort by price ascending
                     logger.info("Sorting by price (ascending) for refinement")
-                    # Handle price extraction safely
-                    def get_price(h):
-                        p = h.get('base_price_per_night') or h.get('price')
-                        return float(p) if p else 999999.0
-                    
-                    ranked = sorted(search_results, key=get_price)
+                    ranked = sorted(search_results, key=_get_price)
                     return {**state, "ranked_hotels": ranked[:TOP_K_RESULTS]}
                 
                 if any(kw in query_lower for kw in ["rating", "best", "review", "top"]):
@@ -444,25 +608,31 @@ OUTPUT (query only, no explanation):"""
                     ranked = sorted(search_results, key=lambda x: x.get('average_rating', 0), reverse=True)
                     return {**state, "ranked_hotels": ranked[:TOP_K_RESULTS]}
 
+            # Price-aware sorting for budget/luxury initial queries
+            if is_budget_query:
+                logger.info("Sorting by price (ascending) for budget query")
+                ranked = sorted(search_results, key=_get_price)
+                return {**state, "ranked_hotels": ranked[:TOP_K_RESULTS]}
+            if is_luxury_query:
+                logger.info("Sorting by price (descending) for luxury query")
+                ranked = sorted(search_results, key=lambda h: -_get_price(h) if _get_price(h) != 999999.0 else 0)
+                return {**state, "ranked_hotels": ranked[:TOP_K_RESULTS]}
+
             # Default: Calculate composite score for each hotel
             scored_hotels = []
             for hotel in search_results:
                 # Normalize average_rating - Database consistently uses a 10.0 scale
                 raw_rating = hotel.get('average_rating', 0.0)
-                # Treat rating=0 as "no data" — use neutral 5.0 so unrated hotels
-                # aren't buried below hotels with any real rating.
-                effective_rating = raw_rating if raw_rating > 0 else 5.0
-                normalized_rating = effective_rating / 10.0
+                # Hotels with 0 rating are incomplete records — use true 0 so they sink to bottom
+                normalized_rating = raw_rating / 10.0
                 
                 # Similarity score is already normalized (0-1)
-                similarity = hotel.get('similarity_score', 0.6) # Default if search system didn't provide
+                similarity = hotel.get('similarity_score', 0.5)
                 
-                # Calculate weighted score (0.6 rating + 0.4 similarity)
+                # Calculate weighted score (0.8 rating + 0.2 similarity)
+                # Rating is the dominant factor; similarity breaks ties between close-rated hotels
                 composite_score = (RATING_WEIGHT * normalized_rating) + (SIMILARITY_WEIGHT * similarity)
-                # Store effective_rating so the response layer knows this was imputed
                 hotel_with_score = hotel.copy()
-                if raw_rating == 0.0:
-                    hotel_with_score['_rating_imputed'] = True
                 
                 hotel_with_score['composite_score'] = composite_score
                 scored_hotels.append(hotel_with_score)
@@ -525,12 +695,20 @@ OUTPUT (query only, no explanation):"""
             hydrated_hotels = state.get('hydrated_hotels', [])
             query = state.get('query', '')
             error = state.get('error', '')
+            is_external = state.get('is_external_search', False)
             
             # 1. Handle Errors for UI
             if error and not hydrated_hotels:
+                # City-not-found: give a specific helpful message with available cities
+                if 'have hotels in' in error or 'currently have hotels' in error:
+                    clean_err = error.replace('Invalid input: ', '')
+                    return {
+                        **state,
+                        "response": f"Sorry, {clean_err} Try searching for one of those instead!"
+                    }
                 return {
                     **state,
-                    "response": f"I hit a small snag: {error.replace('Invalid input: ', '')}. Could you try adjusting your search terms?"
+                    "response": f"I couldn't find any hotels matching those criteria. Could you try adjusting your search terms?"
                 }
             
             if not hydrated_hotels:
@@ -576,20 +754,23 @@ OUTPUT (query only, no explanation):"""
                                 perks.append(f"{perk_name} (in-house)")
                             amenities_found_anywhere.add(req)
 
-                # Fallback perks if still empty
+                # Fallback perks if still empty - use actual amenities from hotel data
                 if not perks:
-                    standard_perks = ["Free breakfast", "Late checkout", "Free Wi-Fi", "Room upgrade"]
-                    perks = [standard_perks[idx % 4], standard_perks[(idx + 1) % 4]]
+                    real_amenities = hotel.get('amenities', [])
+                    if isinstance(real_amenities, list) and real_amenities:
+                        perks = real_amenities[:3]
+                    else:
+                        perks = []
                 
                 hotel['perks'] = perks[:3] # Keep UI clean
                 
-                # Badges (like "15% off")
+                # Only add badges if they actually exist in the data
                 if 'badges' not in hotel:
-                    hotel['badges'] = [f"{15 + idx*5}% OFF"] if idx < 2 else []
+                    hotel['badges'] = []
                 
-                # Image fallback
+                # Image fallback - leave empty if no real images
                 if not hotel.get('images'):
-                    hotel['images'] = [f"https://images.unsplash.com/photo-1566073771259-6a8506099945?w=500&q={80+idx}"]
+                    hotel['images'] = []
 
             # 3. Build context for enthusiastic LLM response
             # Note if some requested amenities are missing
@@ -623,20 +804,44 @@ OUTPUT (query only, no explanation):"""
                             desc_snippet = f" Highlights: \"{match.group(0).strip()}...\""
                             break
                 
-                summary = f"- {hotel.get('hotel_name')} (Rating: {rating}/10): {match_reason}. Amenities: {amenities_str}.{desc_snippet}"
+                # Include booking_url for external hotels so LLM can reference it
+                booking_url = hotel.get('booking_url', '')
+                booking_note = f" Book at: {booking_url}" if booking_url else ""
+                summary = f"- {hotel.get('hotel_name')} (Rating: {rating}/10): {match_reason}. Amenities: {amenities_str}.{desc_snippet}{booking_note}"
                 hotels_context.append(summary)
             
             hotels_text = "\n".join(hotels_context)
             
             # Use standard string and .format() to avoid f-string escaping confusion
             count = len(hydrated_hotels)
+
+            # Build external search instruction block
+            if is_external:
+                external_instruction = """\nEXTERNAL RESULTS NOTICE:
+- These hotels were found via a web search because we do not have hotels in this destination in our partner database.
+- They are NOT bookable through our platform.
+- Acknowledge warmly that we found external options for the user.
+- Each hotel entry in 'Found Hotels' below may include a "Book at: <url>" field.
+  Use that EXACT URL when mentioning booking links. Do NOT write "[booking_url]" or any placeholder.
+  If no URL is provided for a hotel, simply say "book directly on their website".
+- Always close with: "Please note these are external results — not in our partner network. Book directly via the links provided."
+"""
+            else:
+                external_instruction = ""
+
             system_prompt_template = """You are an expert travel concierge.
 Your goal is to generate a warm, persuasive, and helpful response for the user's chat bubble.
 
+CRITICAL RULES — NEVER break these:
+- NEVER invent, assume, or hallucinate hotel names, cities, ratings, prices, or amenities.
+- ONLY reference the hotels EXACTLY as listed below under 'Found Hotels (Contextual Facts)'.
+- If a hotel is in Perth, say it is in Perth. Do NOT say it is in Sydney, Melbourne, or any other city.
+- The rating values below are from a live database — use them exactly as given (e.g. "4.8/10").
+{external_instruction}
 Style Guidelines:
 - Use the Conversation History to maintain a natural flow (e.g., "Following up on that," or "As you mentioned...").
 - Start with an enthusiastic opening.
-- Mention the number of hotels found ({count} hotels).
+- Mention the number of hotels found ({count} hotels) and what city they are in.
 - Be positive and direct. Do NOT hedge, apologize, or add disclaimers unless the hotels
   genuinely could not match (e.g., city not in database, explicit amenity missing).
 - "Semantic match" in the Contextual Facts is NORMAL — it just means vector search was used.
@@ -649,7 +854,7 @@ Conversation History:
 {history_context}
 
 User Query: {query}
-Found Hotels (Contextual Facts):
+Found Hotels (Contextual Facts — use ONLY these, no others):
 {hotels_text}
 """
             
@@ -659,9 +864,12 @@ Found Hotels (Contextual Facts):
             safe_hotels = hotels_text.replace("{", "(").replace("}", ")")
             safe_missing = missing_info.replace("{", "(").replace("}", ")")
 
+            safe_external = external_instruction.replace("{" , "(").replace("}", ")")
+
             messages = [
                 SystemMessage(content=system_prompt_template.format(
                     count=count,
+                    external_instruction=safe_external,
                     history_context=safe_history,
                     query=safe_query, 
                     hotels_text=safe_hotels,
@@ -669,7 +877,7 @@ Found Hotels (Contextual Facts):
                 ))
             ]
             
-            llm_response = self.llm.invoke(messages)
+            llm_response = self._llm_invoke_with_retry(self.llm, messages)
             response_text = llm_response.content.strip()
             
             # Fallback if LLM is being quiet
@@ -677,6 +885,10 @@ Found Hotels (Contextual Facts):
                 count = len(hydrated_hotels)
                 hotel_word = "hotel" if count == 1 else "hotels"
                 response_text = f"Great! I found {count} amazing {hotel_word} that match your preferences. These are my top recommendations for you!"
+
+            # Append external disclaimer as a trailing note
+            if is_external:
+                response_text += "\n\n\u26a0\ufe0f *These are external results not in our partner network. Book directly via the links provided. We cannot guarantee availability or pricing.*"
 
             logger.info(f"Generated UI response: {response_text[:100]}...")
             
@@ -688,9 +900,27 @@ Found Hotels (Contextual Facts):
             
         except Exception as e:
             logger.error(f"Response generation error: {e}")
+            hotels = state.get('hydrated_hotels', [])
+            is_ext = state.get('is_external_search', False)
+            if hotels:
+                count = len(hotels)
+                city_val = hotels[0].get('city', '')
+                city_note = f" in {city_val}" if city_val else ""
+                source_note = " (external results)" if is_ext else ""
+                fallback_resp = (
+                    f"I found {count} hotel{'s' if count != 1 else ''}{city_note}{source_note}. "
+                    "Please check the listings below!"
+                )
+                if is_ext:
+                    fallback_resp += (
+                        "\n\n\u26a0\ufe0f *These are external results not in our partner network. "
+                        "Book directly via the links provided.*"
+                    )
+            else:
+                fallback_resp = "I couldn't find hotels matching that search right now. Please try again shortly."
             return {
                 **state,
-                "response": "I've found some great hotels that match your request! Take a look at the options below."
+                "response": fallback_resp
             }
     
     async def run(
@@ -735,7 +965,8 @@ Found Hotels (Contextual Facts):
             "filters_applied": {},
             "last_hotels": last_hotels or [],
             "is_refinement": False,
-            "skip_query_correction": skip_query_correction
+            "skip_query_correction": skip_query_correction,
+            "is_external_search": False
         }
         
         try:
@@ -744,6 +975,12 @@ Found Hotels (Contextual Facts):
             
             # Execute search and rank synchronously
             state = self._search_node(initial_state)
+            
+            # ── Tavily fallback: fire when DB returns nothing ─────────────
+            if not state.get('search_results') and self.tavily_search and self.tavily_search.available:
+                state = self._tavily_fallback_node(state)
+            # ─────────────────────────────────────────────────────────────
+            
             state = self._rank_node(state)
             
             # Execute hydrate asynchronously

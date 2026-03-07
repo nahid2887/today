@@ -15,7 +15,8 @@ from dataclasses import dataclass
 import logging
 
 from core.database import HotelDatabase
-from core.nl_to_sql import NLtoSQLConverter, HybridNLSearch
+# NL-to-SQL import kept for reference; currently disabled in __init__
+# from core.nl_to_sql import NLtoSQLConverter, HybridNLSearch
 from sentence_transformers import SentenceTransformer
 
 logger = logging.getLogger(__name__)
@@ -66,7 +67,10 @@ class IntegratedHotelSearch:
             use_vector_ranking: Whether to apply vector similarity ranking
         """
         self.db = HotelDatabase()
-        self.nl_search = HybridNLSearch(groq_api_key) if groq_api_key else None
+        # NL-to-SQL disabled: HybridNLSearch requires (database, vector_manager) 
+        # but we use direct DB filters + vector ranking instead.
+        # To re-enable, pass: HybridNLSearch(self.db, vector_manager_instance)
+        self.nl_search = None
         self.use_vector_ranking = use_vector_ranking
         
         # Initialize embedding model for vector ranking
@@ -218,6 +222,7 @@ class IntegratedHotelSearch:
             hotel_name=filters.get('hotel_name'),
             city=filters.get('city'),
             min_rating=filters.get('min_rating'),
+            max_rating=filters.get('max_rating'),
             min_price=filters.get('min_price'),
             max_price=filters.get('max_price'),
             amenities=filters.get('amenities'),
@@ -482,13 +487,26 @@ class IntegratedHotelSearch:
         if not city_found:
             import re
             import difflib
+            # Prepositions that may be captured by IGNORECASE patterns before the city name
+            leading_preps = ['from ', 'in ', 'at ', 'near ', 'around ', 'for ', 'of ']
             for pattern in city_patterns:
                 match = re.search(pattern, query, re.IGNORECASE)
                 if match:
                     potential_city = match.group(1).strip().lower()
-                    # Common non-city words to ignore
-                    ignore_words = {'the', 'a', 'an', 'with', 'and', 'or', 'all', 'some', 'many'}
-                    if potential_city not in ignore_words and len(potential_city) > 3:
+                    # Strip leading prepositions (e.g. 'from sydney' → 'sydney')
+                    for prep in leading_preps:
+                        if potential_city.startswith(prep):
+                            potential_city = potential_city[len(prep):].strip()
+                            break
+                    # Common non-city words to ignore (includes pronouns/placeholders)
+                    ignore_words = {
+                        'the', 'a', 'an', 'with', 'and', 'or', 'all', 'some', 'many',
+                        'top', 'best', 'good', 'cheap', 'luxury',
+                        # Pronouns / placeholder location words — NOT city names
+                        'there', 'here', 'somewhere', 'anywhere', 'everywhere',
+                        'that', 'this', 'place', 'city', 'town', 'location',
+                    }
+                    if potential_city not in ignore_words and len(potential_city) > 2:
                         # Try fuzzy matching (Difflib)
                         close_matches = difflib.get_close_matches(potential_city, valid_cities, n=1, cutoff=0.7)
                         if close_matches:
@@ -498,28 +516,40 @@ class IntegratedHotelSearch:
                             city_found = True
                             break
                         else:
-                            # Found a city-like term that's not in our valid list
-                            # SOFTENED: Don't mark as invalid immediately, just log it.
-                            # Only mark invalid if it's the ONLY thing in the query and doesn't match a city.
-                            if len(query.split()) < 4:
-                                logger.warning(f"Invalid city detected: '{potential_city}' not in database")
-                                filters['_invalid_input'] = True
-                                filters['_invalid_reason'] = f"City '{potential_city}' not found in database"
-                                return filters
-                            else:
-                                logger.info(f"Unknown location term '{potential_city}' - allowing vector search to handle it.")
-                                # We don't set 'city' filter, which allow global search
-                                break  # Stop after first unknown location — avoid double-logging
+                            # City-like term found but NOT in our database
+                            # Build a helpful available-cities list using the cached DB cities
+                            known_raw = [c for c in (self._available_cities or []) if c.lower() not in ['ipsum similique vol']]
+                            # Deduplicate: strip " Western Australia" suffix and keep unique base city names
+                            _seen_cities = set()
+                            known = []
+                            for _c in sorted(known_raw):
+                                _base = re.sub(r'\s+western australia$', '', _c.lower()).strip().title()
+                                if _base not in _seen_cities:
+                                    _seen_cities.add(_base)
+                                    known.append(_base)
+                            known_str = ', '.join(sorted(known)) if known else 'various Western Australian cities'
+                            logger.warning(f"Unknown city detected: '{potential_city}' not in database")
+                            filters['_invalid_input'] = True
+                            filters['_unknown_city'] = True
+                            filters['_unknown_city_name'] = potential_city.title()
+                            filters['_invalid_reason'] = (
+                                f"We don't have hotels in '{potential_city.title()}' yet. "
+                                f"We currently have hotels in: {known_str}."
+                            )
+                            return filters
         
         # PRIORITY 1 FIX: Extract price FIRST (before rating) to avoid conflicts
         # Price extraction with validation (handles both min and max price)
         import re
         
-        # Check for price patterns first, but ensure they aren't followed by rating terms
-        # Handle common then/than typo
+        # Price extraction: require an explicit price keyword OR a $ sign to avoid
+        # clashing with rating queries like "rating more than 5" or "above 4 stars"
         min_price_patterns = [
-            r'(?:more\s+th[ae]n|above|over|greater\s+th[ae]n|at\s+least|starting\s+from|min|minimum)\s+(?:price|rate|budget|cost)?\s*(?:of\s+)?\$?(\d+(?:\.\d+)?)\b(?!\s*(?:star|rating|review))',
-            r'\$?(\d+(?:\.\d+)?)\s*(?:\+)(?!\s*(?:star|rating|review))',
+            # Requires explicit price/budget/cost keyword — prevents "rating more than 5" matching here
+            r'(?:more\s+th[ae]n|above|over|greater\s+th[ae]n|at\s+least)\s+(?:price|budget|cost)\s*(?:of\s+)?\$?(\d+(?:\.\d+)?)\b',
+            # $ sign makes it unambiguous regardless of surrounding words
+            r'\$(\d+(?:\.\d+)?)\s*(?:\+)',
+            r'(?:starting\s+from|min(?:imum)?)\s+\$(\d+(?:\.\d+)?)',
             r'\$?(\d+(?:\.\d+)?)\s*(?:dollars?|dollar)?\s*(?:and|or)\s+(?:more|above|up|higher)(?!\s*(?:star|rating|review))',
             r'\$?(\d+(?:\.\d+)?)\s*(?:plus|onwards?)(?!\s*(?:star|rating|review))'
         ]
@@ -570,19 +600,37 @@ class IntegratedHotelSearch:
              filters['_invalid_reason'] = f"Price filter '${filters['max_price']}' is too low for matching."
         
         # Rating extraction with validation (AFTER price)
-        # Handles "more than 4 stars", "above 8 ratings"
-        rating_patterns = [
-            r'(?:rated|rating|stars?|reviews?)\s*(?:of|at|above|more\s+th[ae]n|over|at\s+least)?\s*(\d+(?:\.\d+)?)\s*(?:\+)?',
-            r'(\d+(?:\.\d+)?)\s*(?:\+|star|stars|rating|ratings|reviews?)(?!\s*dollars?)',
-            r'(\d+(?:\.\d+)?)\s*and\s+(?:above|up|higher)(?!\s*dollars?)'
-        ]
-        for pattern in rating_patterns:
-            match = re.search(pattern, query_lower)
-            if match:
-                rating = float(match.group(1))
-                if 0 <= rating <= 10:
-                    filters['min_rating'] = rating
-                break
+        # Handle "between X and Y" range first
+        between_rating_match = re.search(
+            r'between\s+(\d+(?:\.\d+)?)\s+(?:to|and)\s+(\d+(?:\.\d+)?)\s*(?:ratings?|stars?|/10)?',
+            query_lower
+        )
+        if between_rating_match:
+            low = float(between_rating_match.group(1))
+            high = float(between_rating_match.group(2))
+            if 0 <= low <= 10 and 0 <= high <= 10:
+                filters['min_rating'] = min(low, high)
+                filters['max_rating'] = max(low, high)
+                logger.info(f"Rating range extracted: {filters['min_rating']} - {filters['max_rating']}")
+        else:
+            # Handles "more than 4 stars", "above 8 ratings"
+            rating_patterns = [
+                r'(?:rated|rating|stars?|reviews?)\s*(?:of|at|above|more\s+th[ae]n|over|at\s+least)?\s*(\d+(?:\.\d+)?)\s*(?:\+)?',
+                r'(\d+(?:\.\d+)?)\s*(?:\+|star|stars|rating|ratings|reviews?)(?!\s*dollars?)',
+                r'(\d+(?:\.\d+)?)\s*and\s+(?:above|up|higher)(?!\s*dollars?)'
+            ]
+            for pattern in rating_patterns:
+                match = re.search(pattern, query_lower)
+                if match:
+                    rating = float(match.group(1))
+                    if 0 <= rating <= 10:
+                        filters['min_rating'] = rating
+                    break
+        
+        # Conflict resolution: if same number extracted as both min_price and min_rating, prefer rating
+        if filters.get('min_price') and filters.get('min_rating') and filters['min_price'] == filters['min_rating']:
+            logger.info(f"Resolved price/rating ambiguity: dropped min_price={filters['min_price']} (same value as min_rating)")
+            del filters['min_price']
         
         # Extract amenities with negation support
         amenity_keywords = {
