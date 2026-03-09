@@ -46,6 +46,7 @@ class OrchestratorState(TypedDict):
     response: str
     hotels: List[Dict[str, Any]]
     last_hotels: List[Dict[str, Any]]
+    pending_hotels: List[Dict[str, Any]]
     metadata: Dict[str, Any]
     error: str
 
@@ -199,15 +200,29 @@ class TravelOrchestrator:
 
         logger.info(f"[CLASSIFY] Analyzing query: {query}")
 
-        # Fast pattern-match FIRST — skip DB call + LLM entirely for greetings
+        # Fast pattern-match FIRST — skip DB call + LLM entirely for pure greetings.
+        # IMPORTANT: patterns must NOT catch action-prefixed queries like
+        # "ok show me hotels", "okay what about fremantle", "got it, now search tokyo".
+        # Only match if the ENTIRE query (stripped) matches the pattern as a complete phrase.
         conversational_patterns = [
-            r'\bhello\b', r'\bhi\b', r'\bhey\b', r'\bgreetings\b', r'\bgood morning\b',
-            r'\bgood afternoon\b', r'\bgood evening\b', r'\bgood night\b', r'\bhowdy\b',
+            r'\bhello\b', r'\bhi\b', r'\bhey\b', r'\bgreetings\b',
+            r'\bgood morning\b', r'\bgood afternoon\b', r'\bgood evening\b',
+            r'\bgood night\b', r'\bhowdy\b',
             r'\bthanks\b', r'\bthank you\b', r'\bcheers\b', r'\bthx\b',
             r'\bbye\b', r'\bgoodbye\b', r'\bhow are you\b', r'\bwhats up\b',
-            r'\bok\b', r'\bokay\b', r'\bgot it\b'
         ]
-        if any(re.search(pattern, query_lower) for pattern in conversational_patterns):
+        # Standalone words only — shorter than 4 tokens and matched
+        standalone_chat = {'ok', 'okay', 'got it', 'noted', 'sure', 'great', 'cool', 'nice'}
+
+        hotel_action_words = {'hotel', 'hotels', 'stay', 'room', 'book', 'show', 'find',
+                              'search', 'cheap', 'luxury', 'pool', 'spa', 'gym'}
+        query_words = set(query_lower.split())
+
+        is_conversational = any(re.search(pattern, query_lower) for pattern in conversational_patterns)
+        is_standalone_chat = query_lower.strip().rstrip('!?.,') in standalone_chat
+        has_hotel_action = bool(query_words & hotel_action_words)
+
+        if (is_conversational or is_standalone_chat) and not has_hotel_action:
             logger.info("[CLASSIFY] Pattern matched: NORMAL_CHAT")
             return {**state, "query_type": QueryType.NORMAL_CHAT.value}
 
@@ -276,8 +291,12 @@ Task 2 - If HOTEL_SEARCH, produce a CORRECTED QUERY following these rules:
       "best rated hotels"       → QUERY: best rated hotels in Melbourne
       "hotels with pool"        → QUERY: hotels with pool in Melbourne
       "cheap ones under $100"   → QUERY: cheap hotels under $100 in Melbourne
-  - Only DROP the carried-over city if the user clearly mentions a DIFFERENT city
-    or asks something city-agnostic like "any country" / "worldwide".
+  - **SUPREME RULE**: If the user's current query EXPLICITLY names a city (e.g.
+    "tokyo", "london", "new york"), ALWAYS use that city — NEVER override it with
+    the history city. "no wait, tokyo hotels please" → QUERY: hotels in Tokyo.
+  - Only DROP the carried-over city if:
+    (a) the user clearly mentions a DIFFERENT city in the current query, OR
+    (b) asks something city-agnostic like "any country" / "worldwide".
   - If there is NO city in history at all, output the query as-is with no city added.
   - Preserve budget/amenity constraints if query is a follow-up refinement.
   - Output ONLY the search query, no explanation.
@@ -508,6 +527,7 @@ Provide helpful travel information and offer to help find hotels if needed."""
                 **state,
                 "response": result['natural_language_response'],
                 "hotels": result['recommended_hotels'],
+                "pending_hotels": result.get('pending_hotels', []),
                 "last_hotels": result.get('last_hotels', []),
                 "shown_hotel_ids": result['shown_hotel_ids'],
                 "metadata": result.get('metadata', {})
@@ -549,6 +569,7 @@ Provide helpful travel information and offer to help find hotels if needed."""
             "history": history or [],
             "shown_hotel_ids": shown_hotel_ids or [],
             "last_hotels": last_hotels or [],
+            "pending_hotels": [],
             "query_type": "",
             "response": "",
             "hotels": [],
@@ -575,6 +596,7 @@ Provide helpful travel information and offer to help find hotels if needed."""
             return {
                 "natural_language_response": final_state.get("response", ""),
                 "recommended_hotels": final_state.get("hotels", []),
+                "pending_hotels": final_state.get("pending_hotels", []),
                 "last_hotels": final_state.get("last_hotels", []),
                 "shown_hotel_ids": final_state.get("shown_hotel_ids") or shown_hotel_ids or [],
                 "metadata": {

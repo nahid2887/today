@@ -6,7 +6,31 @@ Uses direct database access for real-time hotel data.
 """
 import asyncio
 import logging
+import re
 from typing import Dict, Any, List, Optional
+
+# Patterns that mean "give me the next batch of hotels" rather than a new search.
+# Checked against session_pending_hotels before calling the agent.
+# NOTE: filler words like "some", "me", "us", "can you" are ignored via lookahead logic.
+_SHOW_MORE_RE = re.compile(
+    r'(?:'
+    # "show ... more" with optional filler ("show some more", "can you show me more")
+    r'show\s+(?:\w+\s+){0,3}more'
+    r'|more\s+hotels?|more\s+options?|more\s+results?|see\s+more'
+    r'|any\s+(?:more|others?)\b|other\s+hotels?|what\s+else|more\s+please'
+    r'|next\s+(?:hotels?|ones?)|rest\s+of|remaining\s+hotels?'
+    r'|suggest\s+more|give\s+more|list\s+more|any\s+more'
+    r'|show\s+(?:me\s+)?(?:some\s+)?more'
+    r')|^(?:more|others?|next|continue|remaining)$',
+    re.IGNORECASE
+)
+
+_CHEAPER_RE = re.compile(r'cheap|budget|affordable|inexpensive|low.?cost|less\s+expensive', re.IGNORECASE)
+_LUXURY_RE  = re.compile(r'luxury|premium|upscale|expensive|5.?star|five.?star', re.IGNORECASE)
+
+def _is_show_more_query(text: str) -> bool:
+    """Return True if the query is asking for more results from the current batch."""
+    return bool(_SHOW_MORE_RE.search(text.strip()))
 
 from core.integrated_search import IntegratedHotelSearch
 from agents.orchestrator import TravelOrchestrator
@@ -181,6 +205,8 @@ async def main():
     # Interactive loop with session state
     history = []
     shown_hotel_ids = []
+    last_hotels: List[Dict[str, Any]] = []         # full result pool from previous turn
+    session_pending_hotels: List[Dict[str, Any]] = []  # fetched but not yet shown
     
     while True:
         try:
@@ -204,14 +230,64 @@ async def main():
                 print("\n✓ Session reset! Clearing history and shown hotels.")
                 history = []
                 shown_hotel_ids = []
+                last_hotels = []
+                session_pending_hotels = []
                 continue
             
-            # Process query with session state
             print("\nProcessing...")
-            result = await run_travel_chat(query, history, shown_hotel_ids)
-            
-            # Update shown hotel IDs from result
-            shown_hotel_ids = result.get('shown_hotel_ids', shown_hotel_ids)
+
+            # ── Show-more shortcut: serve the next batch without calling the agent ──
+            if session_pending_hotels and _is_show_more_query(query):
+                # Apply optional price refinement on the pending batch
+                pending_pool = list(session_pending_hotels)
+                if _CHEAPER_RE.search(query):
+                    pending_pool.sort(key=lambda h: h.get('base_price_per_night') or 999999)
+                elif _LUXURY_RE.search(query):
+                    pending_pool.sort(key=lambda h: -(h.get('base_price_per_night') or 0))
+                batch = pending_pool[:3]
+                session_pending_hotels = pending_pool[3:]
+                new_ids = [h['id'] for h in batch if h.get('id')]
+                shown_hotel_ids = list(set(shown_hotel_ids + new_ids))
+                city = batch[0].get('city', '') if batch else ''
+                names = ', '.join(h.get('hotel_name', 'Hotel') for h in batch)
+                more_note = (
+                    f" I have {len(session_pending_hotels)} more available — just ask!"
+                    if session_pending_hotels else
+                    " That's all the options I found."
+                )
+                is_external = any(h.get('source') == 'external' for h in batch)
+                disclaimer = (
+                    "\n\n⚠️ *These are external results not in our partner network. "
+                    "Book directly via the links provided. We cannot guarantee availability or pricing.*"
+                    if is_external else ""
+                )
+                plural = 's' if len(batch) != 1 else ''
+                resp_text = (
+                    f"Here are {len(batch)} more hotel{plural}"
+                    + (f" in {city}" if city else "")
+                    + f": {names}.{more_note}{disclaimer}"
+                )
+                result = {
+                    "natural_language_response": resp_text,
+                    "recommended_hotels": batch,
+                    "pending_hotels": session_pending_hotels,
+                    "shown_hotel_ids": shown_hotel_ids,
+                    "last_hotels": last_hotels,
+                    "metadata": {
+                        "query_type": "hotel_search",
+                        "query": query,
+                        "total_shown_in_session": len(shown_hotel_ids),
+                    },
+                }
+            else:
+                # ── Normal agent call ───────────────────────────────────────────
+                # Start fresh pending list; a new search replaces the old one.
+                session_pending_hotels = []
+                result = await run_travel_chat(query, history, shown_hotel_ids, last_hotels)
+                # Store pending hotels and last_hotels for follow-up turns
+                session_pending_hotels = result.get('pending_hotels', [])
+                last_hotels = result.get('last_hotels', last_hotels)
+                shown_hotel_ids = result.get('shown_hotel_ids', shown_hotel_ids)
             
             # Display response
             print("\n" + "=" * 60)
@@ -237,6 +313,8 @@ async def main():
             
             if metadata.get('total_shown_in_session', 0) > 0:
                 print(f"💡 Session: Hotels shown this session: {metadata['total_shown_in_session']}")
+            if session_pending_hotels:
+                print(f"➕ {len(session_pending_hotels)} more hotel(s) available — ask 'show more' to see them.")
             
             # Display hotel details
             if result['recommended_hotels']:
@@ -254,7 +332,7 @@ async def main():
                 for i, hotel in enumerate(result['recommended_hotels'], 1):
                     name = hotel.get('hotel_name', hotel.get('name', 'N/A'))
                     city = hotel.get('city', 'N/A').title()
-                    rating = hotel.get('average_rating', hotel.get('rating', 0))
+                    rating = hotel.get('average_rating', hotel.get('rating')) or 0
                     reviews = hotel.get('total_ratings', hotel.get('reviews_count', 0))
                     price = hotel.get('base_price_per_night', hotel.get('price', 'N/A'))
                     

@@ -505,16 +505,24 @@ OUTPUT (query only, no explanation):"""
                     "error": original_error or "No hotels found for this location."
                 }
 
-            # Filter out 0-rated hotels (same quality bar as the DB filter)
-            rated_hotels = [h for h in hotels if h.get('average_rating', 0) > 0]
+            # Filter out only hotels explicitly rated 0 (bad data).
+            # Hotels with None rating (unknown) are kept — they may still be good options.
+            rated_hotels = [h for h in hotels if h.get('average_rating') != 0.0]
             if rated_hotels:
                 hotels = rated_hotels
-            # else keep all (every hotel was unrated) — better than empty results
+            # else keep all (every hotel has bad data) — better than empty results
+
+            # Always try to show at least 3 hotels; if we have fewer, that's fine.
+            logger.info(f"[TAVILY FALLBACK] {len(hotels)} hotels after quality filter")
 
             # Apply min_rating filter from user query (Tavily may return lower-rated hotels)
+            # Hotels with None rating are treated as "unknown" and kept (benefit of the doubt).
             min_rating = clean_filters.get('min_rating')
             if min_rating is not None:
-                filtered = [h for h in hotels if h.get('average_rating', 0) >= min_rating]
+                filtered = [
+                    h for h in hotels
+                    if h.get('average_rating') is None or (h.get('average_rating') or 0) >= min_rating
+                ]
                 if filtered:
                     hotels = filtered
                     logger.info(f"[TAVILY FALLBACK] Applied min_rating={min_rating} filter: {len(hotels)} hotels remain")
@@ -522,7 +530,10 @@ OUTPUT (query only, no explanation):"""
             # Apply max_rating filter
             max_rating = clean_filters.get('max_rating')
             if max_rating is not None:
-                filtered = [h for h in hotels if h.get('average_rating', 0) < max_rating]
+                filtered = [
+                    h for h in hotels
+                    if h.get('average_rating') is None or (h.get('average_rating') or 0) < max_rating
+                ]
                 if filtered:
                     hotels = filtered
 
@@ -605,7 +616,7 @@ OUTPUT (query only, no explanation):"""
                 if any(kw in query_lower for kw in ["rating", "best", "review", "top"]):
                     # Sort by rating descending
                     logger.info("Sorting by rating (descending) for refinement")
-                    ranked = sorted(search_results, key=lambda x: x.get('average_rating', 0), reverse=True)
+                    ranked = sorted(search_results, key=lambda x: x.get('average_rating') or 0, reverse=True)
                     return {**state, "ranked_hotels": ranked[:TOP_K_RESULTS]}
 
             # Price-aware sorting for budget/luxury initial queries
@@ -622,8 +633,8 @@ OUTPUT (query only, no explanation):"""
             scored_hotels = []
             for hotel in search_results:
                 # Normalize average_rating - Database consistently uses a 10.0 scale
-                raw_rating = hotel.get('average_rating', 0.0)
-                # Hotels with 0 rating are incomplete records — use true 0 so they sink to bottom
+                raw_rating = hotel.get('average_rating') or 0.0
+                # Hotels with None/0 rating are incomplete records — use true 0 so they sink to bottom
                 normalized_rating = raw_rating / 10.0
                 
                 # Similarity score is already normalized (0-1)
@@ -648,7 +659,7 @@ OUTPUT (query only, no explanation):"""
                 logger.info(
                     f"  {i}. {hotel.get('hotel_name')} - "
                     f"Score: {hotel['composite_score']:.3f} "
-                    f"(Rating: {hotel.get('average_rating', 0):.2f}, "
+                    f"(Rating: {(hotel.get('average_rating') or 0):.2f}, "
                     f"Similarity: {hotel.get('similarity_score', 0):.3f})"
                 )
             
@@ -696,6 +707,7 @@ OUTPUT (query only, no explanation):"""
             query = state.get('query', '')
             error = state.get('error', '')
             is_external = state.get('is_external_search', False)
+            pending_count = state.get('_pending_count', 0)
             
             # 1. Handle Errors for UI
             if error and not hydrated_hotels:
@@ -789,7 +801,7 @@ OUTPUT (query only, no explanation):"""
 
             hotels_context = []
             for i, hotel in enumerate(hydrated_hotels, 1):
-                rating = hotel.get('average_rating', 0.0)
+                rating = hotel.get('average_rating') or 0.0
                 amenities_str = ", ".join(hotel.get('perks', []))
                 match_reason = hotel.get('match_reason', '')
                 
@@ -807,13 +819,20 @@ OUTPUT (query only, no explanation):"""
                 # Include booking_url for external hotels so LLM can reference it
                 booking_url = hotel.get('booking_url', '')
                 booking_note = f" Book at: {booking_url}" if booking_url else ""
-                summary = f"- {hotel.get('hotel_name')} (Rating: {rating}/10): {match_reason}. Amenities: {amenities_str}.{desc_snippet}{booking_note}"
+                summary = f"- {hotel.get('hotel_name')} (Rating: {rating}/10): {match_reason}. Amenities: {amenities_str}.{desc_snippet}"
                 hotels_context.append(summary)
             
             hotels_text = "\n".join(hotels_context)
             
             # Use standard string and .format() to avoid f-string escaping confusion
             count = len(hydrated_hotels)
+            more_hint = (
+                f"- You are showing {count} hotels in this reply. There are {pending_count} more available. "
+                "End your response with a natural, friendly invitation (e.g. 'I have a few more options if you'd like to see them!'). "
+                "Do NOT use technical words like 'batch', 'page', or 'pending'."
+                if pending_count > 0 else
+                "- These are all the available results for this search. Do not imply more are coming."
+            )
 
             # Build external search instruction block
             if is_external:
@@ -821,9 +840,7 @@ OUTPUT (query only, no explanation):"""
 - These hotels were found via a web search because we do not have hotels in this destination in our partner database.
 - They are NOT bookable through our platform.
 - Acknowledge warmly that we found external options for the user.
-- Each hotel entry in 'Found Hotels' below may include a "Book at: <url>" field.
-  Use that EXACT URL when mentioning booking links. Do NOT write "[booking_url]" or any placeholder.
-  If no URL is provided for a hotel, simply say "book directly on their website".
+- Do NOT mention or write any URLs, links, or booking addresses in your response. The UI handles this automatically.
 - Always close with: "Please note these are external results — not in our partner network. Book directly via the links provided."
 """
             else:
@@ -849,6 +866,8 @@ Style Guidelines:
 - ONLY mention missing amenities if {missing_info} is non-empty. Otherwise stay positive.
 - For ratings, always use a 10-point scale (e.g., "8.5/10").
 - Keep it concise (2-3 sentences max). No bullet lists.
+- NEVER include raw URLs or links in your response. The UI renders booking buttons separately.
+{more_hint}
 
 Conversation History:
 {history_context}
@@ -865,6 +884,7 @@ Found Hotels (Contextual Facts — use ONLY these, no others):
             safe_missing = missing_info.replace("{", "(").replace("}", ")")
 
             safe_external = external_instruction.replace("{" , "(").replace("}", ")")
+            safe_more    = more_hint.replace("{", "(").replace("}", ")")
 
             messages = [
                 SystemMessage(content=system_prompt_template.format(
@@ -873,7 +893,8 @@ Found Hotels (Contextual Facts — use ONLY these, no others):
                     history_context=safe_history,
                     query=safe_query, 
                     hotels_text=safe_hotels,
-                    missing_info=safe_missing
+                    missing_info=safe_missing,
+                    more_hint=safe_more
                 ))
             ]
             
@@ -985,7 +1006,14 @@ Found Hotels (Contextual Facts — use ONLY these, no others):
             
             # Execute hydrate asynchronously
             state = await self._hydrate_node(state)
-            
+
+            # Slice to page size BEFORE response generation so the LLM only
+            # describes the hotels that are actually being shown this turn.
+            _page_size = 3
+            _all_hydrated = state.get('hydrated_hotels', [])
+            _pending_raw  = _all_hydrated[_page_size:]
+            state = {**state, 'hydrated_hotels': _all_hydrated[:_page_size], '_pending_count': len(_pending_raw)}
+
             # Generate response synchronously
             final_state = self._generate_response_node(state)
             
@@ -1011,11 +1039,18 @@ Found Hotels (Contextual Facts — use ONLY these, no others):
                 {k: v for k, v in h.items() if k not in _internal_keys}
                 for h in final_state.get('hydrated_hotels', [])
             ]
+            # Build pending list (hotels not shown this turn) from the pre-sliced remainder
+            pending_hotels = [
+                {k: v for k, v in h.items() if k not in _internal_keys}
+                for h in _pending_raw
+            ]
+            hotels_this_turn = clean_hotels  # already capped at _page_size
 
             # Format output
             result = {
                 "natural_language_response": final_state.get("response", ""),
-                "recommended_hotels": clean_hotels,
+                "recommended_hotels": hotels_this_turn,
+                "pending_hotels": pending_hotels,   # held for next "show more" turn
                 "last_hotels": final_state.get("search_results", []), # Pass back for multi-turn memory
                 "shown_hotel_ids": updated_shown_ids,  # Return updated list for session
                 "metadata": {
@@ -1023,11 +1058,16 @@ Found Hotels (Contextual Facts — use ONLY these, no others):
                     "filters_applied": final_state.get("filters_applied", {}),
                     "total_found": len(final_state.get("search_results", [])),
                     "total_shown_in_session": len(updated_shown_ids),
+                    "has_more": len(pending_hotels) > 0,
                     "error": final_state.get("error", "")
                 }
             }
             
-            logger.info(f"Agent completed successfully. Returned {len(result['recommended_hotels'])} hotels (total shown in session: {len(updated_shown_ids)})")
+            logger.info(
+                f"Agent completed successfully. Returned {len(hotels_this_turn)} hotels "
+                f"({len(pending_hotels)} pending for follow-up, "
+                f"total shown in session: {len(updated_shown_ids)})"
+            )
             return result
             
         except Exception as e:

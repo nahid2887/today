@@ -463,15 +463,20 @@ class IntegratedHotelSearch:
                 if negated_city:
                     break
         
+# Build short-name aliases for compound city names (e.g. 'northbridge western australia' → 'northbridge')
+        # This lets users say "hotels in northbridge" and still match the DB city.
+        city_short_map = {}
+        for _c in valid_cities:
+            if ' western australia' in _c:
+                _short = _c.replace(' western australia', '').strip()
+                if _short and _short not in valid_cities:  # only add if not already a standalone entry
+                    city_short_map[_short] = _c
+
         # Check for city-like patterns in query (only if no negation)
-        city_patterns = [
-            r'(?:hotels?|stays?|location|in|at|near)\s+(?:in|at|near)?\s*([A-Z][a-zA-Z\s]+?)(?:\s+with|\s+under|\s+rated|\?|,|$)',
-            r'(?:in|at)\s+([A-Z][a-zA-Z\s]+?)(?:\s+hotels?|\s+with|\s+under|\?|$)',
-        ]
-        
         city_found = False
         if not negated_city:  # Only look for positive city if no negation
             import re
+            # First pass: check full city names (exact word-boundary match)
             for city in valid_cities:
                 # Use word boundaries to avoid substring false positives (e.g. "as" matching "last")
                 if re.search(r'\b' + re.escape(city.lower()) + r'\b', query_lower):
@@ -479,64 +484,79 @@ class IntegratedHotelSearch:
                     filters['city'] = city.title()
                     city_found = True
                     break
+            # Second pass: check short-name aliases (e.g. 'northbridge' → 'Northbridge Western Australia')
+            if not city_found:
+                for short, full_city in city_short_map.items():
+                    if re.search(r'\b' + re.escape(short) + r'\b', query_lower):
+                        logger.info(f"City short-name '{short}' matched to DB city '{full_city}'")
+                        filters['city'] = full_city.title()
+                        city_found = True
+                        break
         
         if not city_found:
              logger.info(f"No city found in query loop. Query: '{query_lower}'")
         
         # Check if query mentions a city-like term that's not in valid list
+        # Use a case-sensitive pattern: ProperNoun city words start with a capital in the
+        # original query string, so no IGNORECASE here — filler words like "for", "to",
+        # "with", "cheaper" are lowercase and will NOT be captured.
         if not city_found:
             import re
             import difflib
             # Prepositions that may be captured by IGNORECASE patterns before the city name
             leading_preps = ['from ', 'in ', 'at ', 'near ', 'around ', 'for ', 'of ']
-            for pattern in city_patterns:
-                match = re.search(pattern, query, re.IGNORECASE)
-                if match:
-                    potential_city = match.group(1).strip().lower()
-                    # Strip leading prepositions (e.g. 'from sydney' → 'sydney')
-                    for prep in leading_preps:
-                        if potential_city.startswith(prep):
-                            potential_city = potential_city[len(prep):].strip()
-                            break
-                    # Common non-city words to ignore (includes pronouns/placeholders)
-                    ignore_words = {
-                        'the', 'a', 'an', 'with', 'and', 'or', 'all', 'some', 'many',
-                        'top', 'best', 'good', 'cheap', 'luxury',
-                        # Pronouns / placeholder location words — NOT city names
-                        'there', 'here', 'somewhere', 'anywhere', 'everywhere',
-                        'that', 'this', 'place', 'city', 'town', 'location',
-                    }
-                    if potential_city not in ignore_words and len(potential_city) > 2:
-                        # Try fuzzy matching (Difflib)
-                        close_matches = difflib.get_close_matches(potential_city, valid_cities, n=1, cutoff=0.7)
-                        if close_matches:
-                            corrected_city = close_matches[0]
-                            logger.info(f"Fuzzy match: Corrected '{potential_city}' to '{corrected_city}'")
-                            filters['city'] = corrected_city.title()
-                            city_found = True
-                            break
-                        else:
-                            # City-like term found but NOT in our database
-                            # Build a helpful available-cities list using the cached DB cities
-                            known_raw = [c for c in (self._available_cities or []) if c.lower() not in ['ipsum similique vol']]
-                            # Deduplicate: strip " Western Australia" suffix and keep unique base city names
-                            _seen_cities = set()
-                            known = []
-                            for _c in sorted(known_raw):
-                                _base = re.sub(r'\s+western australia$', '', _c.lower()).strip().title()
-                                if _base not in _seen_cities:
-                                    _seen_cities.add(_base)
-                                    known.append(_base)
-                            known_str = ', '.join(sorted(known)) if known else 'various Western Australian cities'
-                            logger.warning(f"Unknown city detected: '{potential_city}' not in database")
-                            filters['_invalid_input'] = True
-                            filters['_unknown_city'] = True
-                            filters['_unknown_city_name'] = potential_city.title()
-                            filters['_invalid_reason'] = (
-                                f"We don't have hotels in '{potential_city.title()}' yet. "
-                                f"We currently have hotels in: {known_str}."
-                            )
-                            return filters
+            # Case-sensitive: [A-Z] only matches a literal uppercase letter.
+            # Captures 1-3 proper-noun words (all starting uppercase) after "in/at/near/from".
+            # Stops at any lowercase word, digit, punctuation, or end-of-string, so filler
+            # words and phrases ("for 2 nights", "with cheaper options") are never included.
+            _city_re = re.compile(
+                r'(?:^|\s)(?:in|at|near|from)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,2})\b'
+            )
+            for _m in _city_re.finditer(query):  # use original (mixed-case) query
+                potential_city = _m.group(1).strip().lower()
+                # Strip leading prepositions just in case (shouldn't be needed with new regex)
+                for prep in leading_preps:
+                    if potential_city.startswith(prep):
+                        potential_city = potential_city[len(prep):].strip()
+                        break
+                # Common non-city words to ignore (includes pronouns/placeholders)
+                ignore_words = {
+                    'the', 'a', 'an', 'with', 'and', 'or', 'all', 'some', 'many',
+                    'top', 'best', 'good', 'cheap', 'luxury',
+                    'there', 'here', 'somewhere', 'anywhere', 'everywhere',
+                    'that', 'this', 'place', 'city', 'town', 'location',
+                }
+                if potential_city not in ignore_words and len(potential_city) > 2:
+                    # Try fuzzy matching (Difflib)
+                    close_matches = difflib.get_close_matches(potential_city, valid_cities, n=1, cutoff=0.7)
+                    if close_matches:
+                        corrected_city = close_matches[0]
+                        logger.info(f"Fuzzy match: Corrected '{potential_city}' to '{corrected_city}'")
+                        filters['city'] = corrected_city.title()
+                        city_found = True
+                        break
+                    else:
+                        # City-like term found but NOT in our database
+                        # Build a helpful available-cities list using the cached DB cities
+                        known_raw = [c for c in (self._available_cities or []) if c.lower() not in ['ipsum similique vol']]
+                        # Deduplicate: strip " Western Australia" suffix and keep unique base city names
+                        _seen_cities = set()
+                        known = []
+                        for _c in sorted(known_raw):
+                            _base = re.sub(r'\s+western australia$', '', _c.lower()).strip().title()
+                            if _base not in _seen_cities:
+                                _seen_cities.add(_base)
+                                known.append(_base)
+                        known_str = ', '.join(sorted(known)) if known else 'various Western Australian cities'
+                        logger.warning(f"Unknown city detected: '{potential_city}' not in database")
+                        filters['_invalid_input'] = True
+                        filters['_unknown_city'] = True
+                        filters['_unknown_city_name'] = potential_city.title()
+                        filters['_invalid_reason'] = (
+                            f"We don't have hotels in '{potential_city.title()}' yet. "
+                            f"We currently have hotels in: {known_str}."
+                        )
+                        return filters
         
         # PRIORITY 1 FIX: Extract price FIRST (before rating) to avoid conflicts
         # Price extraction with validation (handles both min and max price)
