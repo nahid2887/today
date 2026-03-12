@@ -175,9 +175,11 @@ class TavilyHotelSearch:
                 max_results=8,
                 search_depth="advanced",
                 days=90,
+                include_images=True,
             )
             info_results = info_resp.get("results", [])
-            logger.info(f"[TAVILY] Info search → {len(info_results)} results")
+            info_images = info_resp.get("images", [])  # flat list of image URLs
+            logger.info(f"[TAVILY] Info search → {len(info_results)} results, {len(info_images)} images")
 
             # ---- Search 2: booking aggregators only ----
             booking_resp = self.client.search(
@@ -210,6 +212,9 @@ class TavilyHotelSearch:
             logger.info(f"[TAVILY] Combined: {len(combined)} unique results")
             hotels = self._extract_hotels_with_llm(combined, city or "", query, filters)
             logger.info(f"[TAVILY] Extracted {len(hotels)} structured hotels")
+            # Assign real images fetched from Tavily to each hotel
+            if info_images:
+                self._assign_images(hotels, info_images, combined)
             return hotels[:max_results]
 
         except Exception as e:
@@ -363,6 +368,78 @@ class TavilyHotelSearch:
         """Build a TripAdvisor search URL as a fallback hotel_url."""
         term = urllib.parse.quote_plus(f"{hotel_name} {city}".strip())
         return f"https://www.tripadvisor.com/Search?q={term}"
+
+    def _assign_images(
+        self,
+        hotels: List[Dict],
+        images: List[Any],
+        tavily_results: List[Dict],
+    ) -> None:
+        """
+        Assign image URLs to hotels in-place using heuristic keyword matching.
+        Tavily returns a flat image list for the whole search; we match each
+        image to a hotel by scoring hotel-name keywords found in the image URL.
+        Hotels that get no keyword match are assigned leftover images in order
+        (all images are relevant to the search topic so any is better than none).
+        No extra API calls or LLM calls — pure heuristic.
+        """
+        # Normalise to plain URL strings (Tavily may return strings or {url, description} dicts)
+        image_urls: List[str] = []
+        for img in images:
+            if isinstance(img, str) and img.startswith('http'):
+                image_urls.append(img)
+            elif isinstance(img, dict):
+                url = img.get('url', '')
+                if url and url.startswith('http'):
+                    image_urls.append(url)
+
+        if not image_urls:
+            return
+
+        used: set = set()
+
+        # First pass — keyword-matched assignment
+        for hotel in hotels:
+            if hotel.get('images'):  # already populated
+                continue
+            hotel_name = hotel.get('hotel_name', '')
+            city_str = hotel.get('city', '')
+            name_words = self._name_words(hotel_name)
+            hotel_domain = _url_domain(hotel.get('hotel_url', ''))
+
+            best_url = ''
+            best_score = 0
+            for img_url in image_urls:
+                if img_url in used:
+                    continue
+                img_lower = img_url.lower()
+                score = 0
+                # Image hosted on the hotel's own domain → strong signal
+                if hotel_domain and _url_domain(img_url) == hotel_domain:
+                    score += 5
+                # Hotel name keywords in the image URL path
+                score += sum(1 for w in name_words if w in img_lower)
+                # City name in the URL
+                if city_str and city_str.lower().replace(' ', '') in img_lower.replace('-', '').replace('_', ''):
+                    score += 1
+                if score > best_score:
+                    best_score = score
+                    best_url = img_url
+
+            if best_url and best_score > 0:
+                hotel['images'] = [best_url]
+                used.add(best_url)
+
+        # Second pass — assign unused images to hotels that got nothing
+        remaining = [u for u in image_urls if u not in used]
+        leftover_idx = 0
+        for hotel in hotels:
+            if not hotel.get('images') and leftover_idx < len(remaining):
+                hotel['images'] = [remaining[leftover_idx]]
+                leftover_idx += 1
+
+        assigned = sum(1 for h in hotels if h.get('images'))
+        logger.info(f"[TAVILY] Assigned images to {assigned}/{len(hotels)} hotels")
 
     # ------------------------------------------------------------------
 
